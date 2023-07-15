@@ -52,4 +52,8 @@ class FileHashDaoImpl : FileHashDao {
     override suspend fun count(): Long = DatabaseFactory.dbQuery {
         FileHashTable.selectAll().count()
     }
+
+    override suspend fun queryAll(): Query  = DatabaseFactory.dbQuery {
+        FileHashTable.selectAll()
+    }
 }

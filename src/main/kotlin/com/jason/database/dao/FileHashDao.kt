@@ -1,5 +1,7 @@
 package com.jason.database.dao
 
+import org.jetbrains.exposed.sql.Query
+
 interface FileHashDao {
     suspend fun isExist(path: String): Boolean
 
@@ -16,4 +18,6 @@ interface FileHashDao {
     suspend fun clear(): Boolean
 
     suspend fun count(): Long
+
+    suspend fun queryAll(): Query
 }

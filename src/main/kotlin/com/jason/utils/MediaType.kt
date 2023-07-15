@@ -1,5 +1,6 @@
 package com.jason.utils
 
+import org.slf4j.LoggerFactory
 import java.io.File
 
 object MediaType {
@@ -21,6 +22,7 @@ object MediaType {
     
     fun getMediaType(fileName: String): Media {
         val extension = "." + fileName.substringAfterLast('.', "").lowercase()
+        LoggerFactory.getLogger("HasImage").info("$fileName >> extension = $extension")
         return when {
             mimeTypePPT.contains(extension) -> Media.PPT
             mimeTypeText.contains(extension) -> Media.TEXT
@@ -67,7 +69,7 @@ object MediaType {
     }
     
     fun isAudio(file: File): Boolean {
-        return getMediaType(file.name) == Media.AUDIO
+        return (getMediaType(file.name) == Media.AUDIO)
     }
     
     fun isAudio(fileName: String): Boolean {

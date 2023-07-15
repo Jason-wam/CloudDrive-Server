@@ -7,13 +7,13 @@ object Configure {
     val userDir: File = File(System.getProperty("user.dir"))
     var rootDir: File = File(userDir, "root")
     var cacheDir: File = File(userDir, "cache")
+    var thumbDir: File = File(cacheDir, "thumbnail")
     var ffmpeg: String = "ffmpeg"
     var ffprobe: String = "ffprobe"
 
     fun init() {
-        var configureJSON = ClassLoader.getSystemResourceAsStream("configure.json")?.use {
-            it.readAllBytes().decodeToString()
-        } ?: throw Exception("Configure file not found!")
+
+        var configureJSON = ClassLoader.getSystemResource("configure.json").readText()
 
         val configure = File(userDir, "configure.json")
         if (configure.exists()) {
@@ -35,5 +35,9 @@ object Configure {
         } else {
             File(root)
         }
+
+        rootDir.mkdirs()
+        cacheDir = File(userDir, "cache").also { it.mkdirs() }
+        thumbDir = File(cacheDir, "thumbnail").also { it.mkdirs() }
     }
 }

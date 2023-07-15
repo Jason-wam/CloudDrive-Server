@@ -3,16 +3,16 @@ package com.jason.plugins
 import com.jason.database.DatabaseFactory
 import com.jason.model.CodeMessageRespondEntity
 import com.jason.model.FileListRespondEntity
+import com.jason.model.findFirstMedia
 import com.jason.model.toFileEntities
 import com.jason.utils.*
 import com.jason.utils.ffmpeg.Encoder
 import io.ktor.http.*
 import io.ktor.http.content.*
-import io.ktor.server.routing.*
-import io.ktor.server.response.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
-import io.ktor.util.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import org.slf4j.LoggerFactory
 import java.io.File
 
@@ -22,9 +22,25 @@ fun Application.configureRouting() {
             call.respondText("Hello World!")
         }
 
+        get("/index") {
+            LoggerFactory.getLogger("FileVerify").info("正在刷新文件索引...")
+            FileIndexer.index2()
+            call.respond(CodeMessageRespondEntity(200, "刷新文件索引完毕！"))
+        }
+
+        get("/reindex") {
+            LoggerFactory.getLogger("FileVerify").info("正在重建文件索引...")
+            FileIndexer.reindex()
+            call.respond(CodeMessageRespondEntity(200, "重建文件索引完毕！"))
+        }
+
         get("/list") {
             val hash = call.parameters["hash"]
-            val showHidden = (call.parameters["showHidden"] ?: "false").toBoolean()
+            val sort = call.parameters["sort"].let {
+                ListSort.valueOf(it ?: ListSort.DATE.name)
+            }
+
+            val showHidden = (call.parameters["showHidden"] ?: "true").toBoolean()
             if (hash.isNullOrBlank() || hash == "%root") {
                 if (showHidden) {
                     call.respond(
@@ -32,7 +48,7 @@ fun Application.configureRouting() {
                             DatabaseFactory.fileHashDao.getHash(Configure.rootDir.absolutePath),
                             Configure.rootDir.name,
                             Configure.rootDir.absolutePath,
-                            Configure.rootDir.children.toFileEntities()
+                            Configure.rootDir.children.toFileEntities(sort)
                         )
                     )
                 } else {
@@ -41,7 +57,7 @@ fun Application.configureRouting() {
                             DatabaseFactory.fileHashDao.getHash(Configure.rootDir.absolutePath),
                             Configure.rootDir.name,
                             Configure.rootDir.absolutePath,
-                            Configure.rootDir.children.filter { it.isHidden.not() }.toFileEntities()
+                            Configure.rootDir.children.filter { it.isHidden.not() }.toFileEntities(sort)
                         )
                     )
                 }
@@ -53,10 +69,7 @@ fun Application.configureRouting() {
                     if (showHidden) {
                         call.respond(
                             FileListRespondEntity(
-                                hash,
-                                path.name,
-                                path.absolutePath,
-                                path.children.toFileEntities()
+                                hash, path.name, path.absolutePath, path.children.toFileEntities(sort)
                             )
                         )
                     } else {
@@ -65,7 +78,7 @@ fun Application.configureRouting() {
                                 hash,
                                 path.name,
                                 path.absolutePath,
-                                path.children.filter { it.isHidden.not() }.toFileEntities()
+                                path.children.filter { it.isHidden.not() }.toFileEntities(sort)
                             )
                         )
                     }
@@ -75,65 +88,6 @@ fun Application.configureRouting() {
 
         //http://127.0.0.1:8080/thumbnail?hash=3d7ebf2ad60d31a04fa9f2ad9031fb33
         get("/thumbnail") {
-            fun createThumbnail(path: String, isGif: Boolean = false): File? {
-                LoggerFactory.getLogger("Thumbnail").info("createThumbnail >> $path")
-                return with(File(path)) {
-                    if (isDirectory) {
-                        val mediaFile = children.sortedByDescending { it.lastModified() }.find { file ->
-                            MediaType.isVideo(file) || MediaType.isImage(file)
-                        }
-                        if (mediaFile != null) {
-                            createThumbnail(mediaFile.absolutePath)
-                        } else {
-                            null
-                        }
-                    } else {
-                        if (this.name.endsWith(".gif", true)) {
-                            this
-                        } else {
-                            val imagePath = File(Configure.cacheDir, "thumbnail").also { it.mkdirs() }
-                            if (isGif && MediaType.isVideo(this)) {
-                                val image = File(imagePath, "${path.toMd5String()}.gif")
-                                if (exists() && MediaType.isVideo(this)) {
-                                    val succeed =
-                                        Encoder(Configure.ffmpeg).input(this).fps(10).t(20f).resize(720).threads(3)
-                                            .startAtHalfDuration(true)
-                                            .execute(image)
-                                    if (succeed) image else null
-                                } else {
-                                    null
-                                }
-                            } else {
-                                if (MediaType.isImage(this)) {
-                                    LoggerFactory.getLogger("Thumbnail").info("resize image >> ${this.absolutePath}")
-                                    val image = File(imagePath, "${path.toMd5String()}.jpg")
-                                    if (exists()) {
-                                        val succeed =
-                                            Encoder(Configure.ffmpeg).input(this).resize(720)
-                                                .execute(image)
-                                        if (succeed) image else null
-                                    } else {
-                                        LoggerFactory.getLogger("Thumbnail").info("resize image failed!")
-                                        null
-                                    }
-                                } else {
-                                    val image = File(imagePath, "${path.toMd5String()}.jpg")
-                                    if (exists() && MediaType.isVideo(this)) {
-                                        val succeed =
-                                            Encoder(Configure.ffmpeg).input(this).param("-frames 1").resize(720)
-                                                .format("mjpeg")
-                                                .startAtHalfDuration(true).execute(image)
-                                        if (succeed) image else null
-                                    } else {
-                                        null
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
             val hash = call.parameters["hash"]
             val isGif = (call.parameters["isGif"] ?: "false").toBoolean()
             if (hash.isNullOrBlank()) {
@@ -253,6 +207,7 @@ fun Application.configureRouting() {
         get("/flash") {
             val hash = call.parameters["hash"]
             val fileHash = call.parameters["fileHash"]
+            val fileName = call.parameters["fileName"] ?: ""
 
             if (hash.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，hash不得为空！"))
@@ -284,7 +239,7 @@ fun Application.configureRouting() {
 
             val originalFile = File(filePath) //已存在的原始文件路径
             if (originalFile.exists()) {
-                val createLink = File(path, originalFile.name)
+                val createLink = File(path, fileName.ifBlank { originalFile.name })
                 if (createLink.exists().not()) {//创建一个符号链接，防止空间占用
                     originalFile.createSymbolicLink(createLink)
                 }
@@ -355,6 +310,75 @@ fun Application.configureRouting() {
                         }
                     }
                     call.respond(CodeMessageRespondEntity(200, "文件上传完毕！"))
+                }
+            }
+        }
+    }
+}
+
+
+suspend fun createThumbnail(path: String, isGif: Boolean = false): File? {
+    LoggerFactory.getLogger("Thumbnail").info("createThumbnail >> $path")
+    with(File(path)) {
+        if (exists().not()) {
+            LoggerFactory.getLogger("Thumbnail").info("file not exist >> $path")
+            return null
+        }
+
+        if (isDirectory) {
+            LoggerFactory.getLogger("Thumbnail").info("get image from children >> $absolutePath")
+            val mediaFile = children.findFirstMedia()
+            if (mediaFile != null) {
+                return createThumbnail(mediaFile.absolutePath)
+            } else { //如果不存在视频或图片则尝试从音频中读取专辑封面
+                val audioFile = children.sortedByDescending { it.lastModified() }.find { file ->
+                    MediaType.isAudio(file)
+                } ?: return null
+
+                return createThumbnail(audioFile.absolutePath)
+            }
+        } else {
+            if (isGif) {
+                if (name.endsWith(".gif", true)) {
+                    LoggerFactory.getLogger("Thumbnail").info("return original gif >> $absolutePath")
+                    return this
+                } else {
+                    if (MediaType.isVideo(this).not()) return null
+
+                    LoggerFactory.getLogger("Thumbnail").info("get gif from video >> $absolutePath")
+                    val image = File(Configure.thumbDir, "${path.toMd5String()}.gif")
+                    val succeed = Encoder(Configure.ffmpeg).input(this).fps(10).t(10f).resize(720)
+                        .threads(3)
+                        .startAtHalfDuration(true).execute(image)
+                    return if (succeed) image else null
+                }
+            } else {
+                if (name.endsWith(".gif", true)) {
+                    LoggerFactory.getLogger("Thumbnail").info("resize image from gif >> $absolutePath")
+                    val image = File(Configure.thumbDir, "${path.toMd5String()}.gif")
+                    val succeed = Encoder(Configure.ffmpeg).input(this).resize(320).execute(image)
+                    return if (succeed) image else this
+                } else {
+                    if (MediaType.isVideo(this)) {
+                        LoggerFactory.getLogger("Thumbnail").info("get image from video >> $absolutePath")
+                        val image = File(Configure.thumbDir, "${path.toMd5String()}.jpg")
+                        val succeed = Encoder(Configure.ffmpeg).input(this).param("-frames 1").resize(320)
+                            .format("mjpeg").startAtHalfDuration(true).execute(image)
+                        return if (succeed) image else null
+                    } else if (MediaType.isImage(this)) {
+                        LoggerFactory.getLogger("Thumbnail").info("resize image >> $absolutePath")
+                        val image = File(Configure.thumbDir, "${path.toMd5String()}.jpg")
+                        val succeed = Encoder(Configure.ffmpeg).input(this).resize(320).execute(image)
+                        return if (succeed) image else this
+                    } else if (MediaType.isAudio(this)) {
+                        LoggerFactory.getLogger("Thumbnail").info("get image from audio >> $absolutePath")
+                        val image = File(Configure.thumbDir, "${path.toMd5String()}.jpg")
+                        val succeed = Encoder(Configure.ffmpeg).input(this).resize(320).execute(image)
+                        return if (succeed) image else this
+                    } else {
+                        LoggerFactory.getLogger("Thumbnail").info("unsupported media type >> $absolutePath")
+                        return null
+                    }
                 }
             }
         }

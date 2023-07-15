@@ -39,43 +39,39 @@ fun File.createSketchedMD5String(): String {
 }
 
 fun InputStream.createMD5String(block: ((bytesRead: Long) -> Unit)? = null): String {
-    return use { stream ->
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var bytesRead: Int
-        var totalBytesRead: Long = 0
-        val messageDigest = MessageDigest.getInstance("MD5")
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var bytesRead: Int
+    var totalBytesRead: Long = 0
+    val messageDigest = MessageDigest.getInstance("MD5")
 
-        while (stream.read(buffer).also { bytesRead = it } != -1) {
-            messageDigest.update(buffer, 0, bytesRead)
-            totalBytesRead += bytesRead
-            block?.invoke(totalBytesRead)
-        }
-
-        val digest = messageDigest.digest()
-        val checksum = BigInteger(1, digest).toString(16)
-        checksum.padStart(32, '0')
+    while (read(buffer).also { bytesRead = it } != -1) {
+        messageDigest.update(buffer, 0, bytesRead)
+        totalBytesRead += bytesRead
+        block?.invoke(totalBytesRead)
     }
+
+    val digest = messageDigest.digest()
+    val checksum = BigInteger(1, digest).toString(16)
+    return checksum.padStart(32, '0')
 }
 
 fun InputStream.createSketchedMD5String(): String {
-    return use { stream ->
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var bytesRead: Int
-        var totalBytesRead: Long = 0
-        val messageDigest = MessageDigest.getInstance("MD5")
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var bytesRead: Int
+    var totalBytesRead: Long = 0
+    val messageDigest = MessageDigest.getInstance("MD5")
 
-        while (stream.read(buffer).also { bytesRead = it } != -1) {
-            messageDigest.update(buffer, 0, bytesRead)
-            totalBytesRead += bytesRead
-            if (totalBytesRead > 2.MB) {//2MB
-                break
-            }
+    while (read(buffer).also { bytesRead = it } != -1) {
+        messageDigest.update(buffer, 0, bytesRead)
+        totalBytesRead += bytesRead
+        if (totalBytesRead > 2.MB) {//2MB
+            break
         }
-
-        val digest = messageDigest.digest()
-        val checksum = BigInteger(1, digest).toString(16)
-        checksum.padStart(32, '0')
     }
+
+    val digest = messageDigest.digest()
+    val checksum = BigInteger(1, digest).toString(16)
+    return checksum.padStart(32, '0')
 }
 
 

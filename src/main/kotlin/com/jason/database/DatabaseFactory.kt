@@ -19,7 +19,7 @@ object DatabaseFactory {
     }
 
     fun init() {
-        val jdbcURL = "jdbc:sqlite:file:${databaseDir.absolutePath}" + File.separator + "database.db"
+        val jdbcURL = "jdbc:sqlite:file:${databaseDir.absolutePath}" + File.separator + "indexes.db"
         val database = Database.connect(jdbcURL, "org.sqlite.JDBC", user = "root", password = "123456")
         transaction(database) {
             SchemaUtils.create(FileHashTable)
