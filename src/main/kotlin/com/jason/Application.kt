@@ -7,22 +7,18 @@ import io.ktor.server.netty.*
 import com.jason.plugins.*
 import com.jason.utils.*
 import kotlinx.coroutines.runBlocking
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Paths
+import org.slf4j.LoggerFactory
 
 fun main() {
     Configure.init()
     DatabaseFactory.init()
 
     runBlocking {
-        FileIndexer.index2()
+        FileIndexer.indexFiles()
     }
-    println()
-    println("启动服务器...")
+    LoggerFactory.getLogger("Main").info("启动服务器...")
     embeddedServer(Netty, port = 8820, host = "0.0.0.0", module = Application::module).start(wait = true)
 }
-
 
 fun Application.module() {
     configureHTTP()

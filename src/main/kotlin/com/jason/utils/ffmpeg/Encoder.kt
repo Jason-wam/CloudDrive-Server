@@ -429,11 +429,9 @@ class Encoder(ffmpeg: String = "ffmpeg") {
 
         execute(params.joinToString(" ")).also {
             return if (it.first) {
-                LoggerFactory.getLogger("Encoder").info("---")
                 LoggerFactory.getLogger("Encoder").info("转码成功: >> ${dir.absolutePath}")
                 true
             } else {
-                LoggerFactory.getLogger("Encoder").error("---")
                 LoggerFactory.getLogger("Encoder").error("转码失败: ${dir.absolutePath} >> ${it.second}")
                 dir.deleteRecursively()
                 false
@@ -452,7 +450,6 @@ class Encoder(ffmpeg: String = "ffmpeg") {
             output.delete()
         }
 
-        LoggerFactory.getLogger("Encoder").info("duration: >> $duration")
         if (startAtHalfDuration) {
             params.indexOfFirst {
                 it.startsWith("-i")
@@ -469,12 +466,10 @@ class Encoder(ffmpeg: String = "ffmpeg") {
 
         execute(params.joinToString(" ")).also {
             return if (it.first) {
-                LoggerFactory.getLogger("Encoder").info("---")
                 LoggerFactory.getLogger("Encoder").info("转码成功: >> ${output.name}")
                 cache.renameTo(output)
                 true
             } else {
-                LoggerFactory.getLogger("Encoder").error("---")
                 LoggerFactory.getLogger("Encoder").error("转码失败: ${output.name} >> ${it.second}")
                 cache.delete()
                 false
@@ -499,13 +494,9 @@ class Encoder(ffmpeg: String = "ffmpeg") {
 
         return if (process.waitFor() != 0) { //0表示正常结束，1：非正常结束
             process.destroy()
-            LoggerFactory.getLogger("Encoder").info("---")
-            LoggerFactory.getLogger("Encoder").info("转码成功: >> $error")
             Pair(false, error.toString())
         } else {
             process.destroy()
-            LoggerFactory.getLogger("Encoder").error("---")
-            LoggerFactory.getLogger("Encoder").error("转码失败: $error")
             Pair(true, error.toString())
         }
     }

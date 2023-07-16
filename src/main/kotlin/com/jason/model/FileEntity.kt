@@ -5,11 +5,8 @@ import com.jason.utils.ListSort
 import com.jason.utils.MediaType
 import com.jason.utils.children
 import kotlinx.serialization.Serializable
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.*
-import kotlin.Comparator
-import kotlin.collections.ArrayList
 
 @Serializable
 data class FileEntity(
@@ -27,9 +24,9 @@ data class FileEntity(
 
 suspend fun List<File>.toFileEntities(sort: ListSort = ListSort.DATE): List<FileEntity> {
     return ArrayList<FileEntity>().apply {
-        this@toFileEntities.sortedByDate().forEach {
-            val children = it.children
+        this@toFileEntities.sort(sort).forEach {
             val hash = DatabaseFactory.fileHashDao.getHash(it.absolutePath)
+            val children = it.children
             val first: File? = children.findFirstMedia()
             add(
                 FileEntity(
@@ -50,13 +47,16 @@ suspend fun List<File>.toFileEntities(sort: ListSort = ListSort.DATE): List<File
 }
 
 fun List<File>.findFirstMedia(): File? {
-    return if (isEmpty()) {
-        null
-    } else find { file ->
-        MediaType.isVideo(file) || MediaType.isImage(file) || MediaType.isAudio(file)
-    } ?: first()
+    return if (isEmpty()) null else sortedByName().run {
+        find { file ->
+            MediaType.isVideo(file)
+        } ?: find { file ->
+            MediaType.isImage(file)
+        } ?: find { file ->
+            MediaType.isAudio(file)
+        } ?: first()
+    }
 }
-
 
 fun List<File>.sort(sort: ListSort): List<File> {
     return when (sort) {

@@ -1,7 +1,11 @@
 package com.jason.utils
 
+import com.jason.model.findFirstMedia
+import com.jason.utils.ffmpeg.Encoder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import java.math.BigInteger
 import java.nio.file.Files
@@ -64,7 +68,7 @@ fun InputStream.createSketchedMD5String(): String {
     while (read(buffer).also { bytesRead = it } != -1) {
         messageDigest.update(buffer, 0, bytesRead)
         totalBytesRead += bytesRead
-        if (totalBytesRead > 2.MB) {//2MB
+        if (totalBytesRead > 0.5.MB) {//2MB
             break
         }
     }
@@ -114,4 +118,94 @@ fun File.createSymbolicLink(toFilePath: File, overwrite: Boolean = false): File 
 
 fun File.isSymlink(): Boolean {
     return Files.isSymbolicLink(toPath())
+}
+
+
+suspend fun File.createGif(): File? = withContext(Dispatchers.IO) {
+    if (isFile.not()) {
+        LoggerFactory.getLogger("Thumbnail").error(
+            "create Gif failed, not a valid file >> $absolutePath"
+        )
+        return@withContext null
+    }
+    if (exists().not()) {
+        LoggerFactory.getLogger("Thumbnail").error(
+            "createThumbnail failed, file not exist >> $absolutePath"
+        )
+        return@withContext null
+    } else {
+        if (name.endsWith(".gif", true)) {
+            LoggerFactory.getLogger("Thumbnail").info("return original gif >> $absolutePath")
+            return@withContext this@createGif
+        } else {
+            if (MediaType.isVideo(this@createGif).not()) {
+                return@withContext null
+            } else {
+                LoggerFactory.getLogger("Thumbnail").info("create gif from video >> $absolutePath")
+                val image = File(Configure.thumbDir, "${path.toMd5String()}.gif")
+                val succeed = Encoder(Configure.ffmpeg).input(this@createGif).fps(10).t(10f).resize(720)
+                    .threads(3)
+                    .startAtHalfDuration(true).execute(image)
+                return@withContext if (succeed) image else null
+            }
+        }
+    }
+}
+
+suspend fun File.createThumbnail(): File? = withContext(Dispatchers.IO) {
+
+
+    if (isDirectory) {
+        LoggerFactory.getLogger("Thumbnail").info(
+            "createThumbnail from children >> $absolutePath"
+        )
+        val mediaFile = children.findFirstMedia()
+        if (mediaFile != null) {
+            return@withContext mediaFile.createThumbnail()
+        } else { //如果不存在视频或图片则尝试从音频中读取专辑封面
+            val audioFile = children.sortedByDescending { it.lastModified() }.find { file ->
+                MediaType.isAudio(file)
+            } ?: return@withContext null
+
+            return@withContext audioFile.createThumbnail()
+        }
+    } else {
+        if (name.endsWith(".gif", true)) {
+            LoggerFactory.getLogger("Thumbnail").info(
+                "createThumbnail from gif >> $absolutePath"
+            )
+            val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.gif")
+            val succeed = Encoder(Configure.ffmpeg).input(this@createThumbnail).resize(320).execute(image)
+            return@withContext if (succeed) image else this@createThumbnail
+        } else {
+            if (MediaType.isVideo(this@createThumbnail)) {
+                LoggerFactory.getLogger("Thumbnail").info(
+                    "createThumbnail from video >> $absolutePath"
+                )
+                val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
+                val succeed = Encoder(Configure.ffmpeg).input(this@createThumbnail).param("-frames 1").resize(320)
+                    .format("mjpeg").startAtHalfDuration(true).execute(image)
+                return@withContext if (succeed) image else null
+            } else if (MediaType.isImage(this@createThumbnail)) {
+                LoggerFactory.getLogger("Thumbnail").info(
+                    "createThumbnail from image >> $absolutePath"
+                )
+                val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
+                val succeed = Encoder(Configure.ffmpeg).input(this@createThumbnail).resize(320).execute(image)
+                return@withContext if (succeed) image else this@createThumbnail
+            } else if (MediaType.isAudio(this@createThumbnail)) {
+                LoggerFactory.getLogger("Thumbnail").info(
+                    "createThumbnail from audio >> $absolutePath"
+                )
+                val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
+                val succeed = Encoder(Configure.ffmpeg).input(this@createThumbnail).resize(320).execute(image)
+                return@withContext if (succeed) image else this@createThumbnail
+            } else {
+                LoggerFactory.getLogger("Thumbnail").info(
+                    "unsupported media type >> $absolutePath"
+                )
+                return@withContext null
+            }
+        }
+    }
 }
