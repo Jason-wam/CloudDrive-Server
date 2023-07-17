@@ -1,8 +1,8 @@
 package com.jason.utils.ffmpeg
 
 import com.jason.utils.Configure
-import com.jason.utils.formatPath
-import com.jason.utils.symbolicPath
+import com.jason.utils.extension.formatPath
+import com.jason.utils.extension.symbolicPath
 import org.json.JSONObject
 import java.io.File
 
@@ -84,8 +84,8 @@ class MediaInfo {
             val streamsArray = obj.optJSONArray("streams")
 
             return MediaInfo().apply {
-                format.formatName = formatObj?.optString("format_name") ?: ""
-                format.formatLongName = formatObj?.optString("format_long_name") ?: ""
+                format.formatName = formatObj?.optString("format_name").orEmpty()
+                format.formatLongName = formatObj?.optString("format_long_name").orEmpty()
                 format.size = formatObj?.optLong("size") ?: 0
                 format.bitRate = formatObj?.optLong("bit_rate") ?: 0
                 format.duration = formatObj?.optDouble("duration") ?: 0.0
@@ -122,10 +122,11 @@ class MediaInfo {
                                 colorTransfer = stream.optString("color_transfer")
                                 colorPrimaries = stream.optString("color_primaries")
                                 if (isHdr.not()) {
-                                    isHdr =
-                                        colorPrimaries.contains("bt2020") && (colorTransfer.contains("arib-std-b67") || colorTransfer.contains(
-                                            "smpte2084"
-                                        ))
+                                    isHdr = colorPrimaries.contains("bt2020") &&
+                                            colorTransfer.contains("arib-std-b67") ||
+                                            colorTransfer.contains(
+                                        "smpte2084"
+                                    )
                                 }
                                 stream.optJSONObject("tags")?.let { tags ->
                                     tags.keys().forEach { key ->

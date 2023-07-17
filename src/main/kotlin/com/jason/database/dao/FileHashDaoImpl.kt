@@ -33,13 +33,19 @@ class FileHashDaoImpl : FileHashDao {
     override suspend fun getPath(hash: String): String = DatabaseFactory.dbQuery {
         FileHashTable.select {
             FileHashTable.hash eq hash
-        }.firstOrNull()?.getOrNull(FileHashTable.path) ?: ""
+        }.firstOrNull()?.getOrNull(FileHashTable.path).orEmpty()
+    }
+
+    override suspend fun getPath(hash: String, parent: String): String = DatabaseFactory.dbQuery {
+        FileHashTable.select {
+            (FileHashTable.hash eq hash) and (FileHashTable.parent eq parent)
+        }.firstOrNull()?.getOrNull(FileHashTable.path).orEmpty()
     }
 
     override suspend fun getHash(path: String): String = DatabaseFactory.dbQuery {
         FileHashTable.select {
             FileHashTable.path eq path
-        }.firstOrNull()?.getOrNull(FileHashTable.hash) ?: ""
+        }.firstOrNull()?.getOrNull(FileHashTable.hash).orEmpty()
     }
 
     override suspend fun delete(path: String): Boolean = DatabaseFactory.dbQuery {
@@ -66,11 +72,19 @@ class FileHashDaoImpl : FileHashDao {
         }
     }
 
-    override suspend fun getByParent(path: String): List<String> = DatabaseFactory.dbQuery {
+    override suspend fun getHashByParent(path: String): List<String> = DatabaseFactory.dbQuery {
         FileHashTable.select {
             FileHashTable.parent eq path
         }.map {
             it[FileHashTable.parent]
+        }
+    }
+
+    override suspend fun getPathByParent(path: String): List<String> = DatabaseFactory.dbQuery {
+        FileHashTable.select {
+            FileHashTable.parent eq path
+        }.map {
+            it[FileHashTable.path]
         }
     }
 

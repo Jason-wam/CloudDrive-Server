@@ -5,14 +5,19 @@ import com.jason.model.CodeMessageRespondEntity
 import com.jason.model.FileListRespondEntity
 import com.jason.model.toFileEntities
 import com.jason.utils.*
+import com.jason.utils.extension.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.util.*
+import io.ktor.utils.io.core.*
+import kotlinx.coroutines.flow.asFlow
 import org.slf4j.LoggerFactory
 import java.io.File
+import kotlin.io.use
 
 fun Application.configureRouting() {
     routing {
@@ -42,37 +47,43 @@ fun Application.configureRouting() {
             }
 
             val showHidden = (call.parameters["showHidden"] ?: "true").toBoolean()
+
+            LoggerFactory.getLogger("List").info("list: hash = $hash,sort = $sort,showHidden = $showHidden ...")
             if (hash.isNullOrBlank() || hash == "%root") {
                 FileIndexer.indexDirectory(Configure.rootDir)
+                File.pathSeparator
+
                 call.respond(
                     FileListRespondEntity(
                         DatabaseFactory.fileHashDao.getHash(Configure.rootDir.absolutePath),
                         Configure.rootDir.absolutePath,
                         Configure.rootDir.absolutePath,
                         Configure.rootDir.children.filter { if (showHidden) true else it.isHidden.not() }
-                            .toFileEntities(sort)
+                            .toFileEntities(sort),
+                        Configure.rootDir.toNavigation()
                     )
                 )
             } else {
                 val path = DatabaseFactory.fileHashDao.getPath(hash)
                 if (path.isBlank()) {
                     call.respond(CodeMessageRespondEntity(404, "NotFound，未查询到目录索引！"))
-                    return@get
-                }
-                val file = File(path)
-                if (file.exists().not()) {
-                    call.respond(CodeMessageRespondEntity(404, "NotFound，文件路径不存在！"))
                 } else {
-                    FileIndexer.indexDirectory(file)
-                    call.respond(
-                        FileListRespondEntity(
-                            hash,
-                            file.name,
-                            file.absolutePath,
-                            file.children.filter { if (showHidden) true else it.isHidden.not() }
-                                .toFileEntities(sort)
+                    val file = File(path)
+                    if (file.exists().not()) {
+                        call.respond(CodeMessageRespondEntity(404, "NotFound，文件路径不存在！"))
+                    } else {
+                        FileIndexer.indexDirectory(file)
+                        call.respond(
+                            FileListRespondEntity(
+                                hash,
+                                file.name,
+                                file.absolutePath,
+                                file.children.filter { if (showHidden) true else it.isHidden.not() }
+                                    .toFileEntities(sort),
+                                file.toNavigation()
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -90,6 +101,7 @@ fun Application.configureRouting() {
                     val file = File(path)
                     val thumbnail = if (isGif) file.createGif() else file.createThumbnail()
                     if (thumbnail != null) {
+                        call.setContentDisposition(file.name)
                         call.respondFile(thumbnail)
                     } else {
                         call.respond(HttpStatusCode.InternalServerError)
@@ -99,36 +111,20 @@ fun Application.configureRouting() {
         }
 
         get("/file") {
-            fun createRespond(path: String): Any {
-                val file = File(path)
-                return if (file.isFile.not()) {
-                    CodeMessageRespondEntity(
-                        400,
-                        "BadRequest，错误的文件路径: ${file.absolutePath}"
-                    )
-                } else {
-                    if (file.exists()) file else {
-                        CodeMessageRespondEntity(
-                            404,
-                            "NotFound，文件不存在！"
-                        )
-                    }
-                }
-            }
-
             val hash = call.parameters["hash"]
             if (hash.isNullOrBlank()) {
-                call.respond(CodeMessageRespondEntity(400, "BadRequest，hash不得为空！"))
+                call.respond(HttpStatusCode.BadRequest, "BadRequest，hash不得为空！")
             } else {
                 val path = DatabaseFactory.fileHashDao.getPath(hash)
                 if (path.isBlank()) {
-                    call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定文件路径！"))
+                    call.respond(HttpStatusCode.NotFound, "NotFound，未查找到指定文件路径！")
                 } else {
-                    val respond = createRespond(path)
-                    if (respond is File) {
-                        call.respondFile(respond)
+                    val file = File(path)
+                    if (file.exists()) {
+                        call.setContentDisposition(file.name)
+                        call.respondFile(file)
                     } else {
-                        call.respond(respond)
+                        call.respond(HttpStatusCode.NotFound, "NotFound，文件不存在！")
                     }
                 }
             }
@@ -199,7 +195,7 @@ fun Application.configureRouting() {
         get("/flash") {
             val hash = call.parameters["hash"]
             val fileHash = call.parameters["fileHash"]
-            val fileName = call.parameters["fileName"] ?: ""
+            val fileName = call.parameters["fileName"].orEmpty()
 
             if (hash.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，hash不得为空！"))
@@ -248,14 +244,8 @@ fun Application.configureRouting() {
         post("/upload") {
             val hash = call.parameters["hash"]
             val fileHash = call.parameters["fileHash"]
-
             if (hash.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，hash不得为空！"))
-                return@post
-            }
-
-            if (fileHash.isNullOrBlank()) {
-                call.respond(CodeMessageRespondEntity(403, "BadRequest，fileHash不得为空！"))
                 return@post
             }
 
@@ -278,6 +268,7 @@ fun Application.configureRouting() {
                 if (folder.isDirectory.not()) {
                     call.respond(CodeMessageRespondEntity(403, "指定的路径非目录类型！"))
                 } else {
+                    LoggerFactory.getLogger("Upload").info("正在接收文件到缓存...")
                     val parts = call.receiveMultipart().readAllParts()
                     if (parts.isEmpty()) {
                         call.respond(CodeMessageRespondEntity(403, "未读取到上传的文件内容！"))
@@ -287,24 +278,29 @@ fun Application.configureRouting() {
                                 val fileName = part.originalFileName ?: "${System.currentTimeMillis()}.data"
 
                                 LoggerFactory.getLogger("Upload").info(
-                                    "正在接收文件：$fileName 到 >> ${folder.absolutePath}"
+                                    "正在复制文件：$fileName 到 >> ${folder.absolutePath}"
                                 )
-
-                                part.streamProvider.invoke().use { input ->
-                                    val tmp = File(folder, "$fileName.tmp")
+                                part.streamProvider().use { input ->
                                     val file = File(folder, fileName)
-                                    tmp.createNewFile()
-                                    tmp.outputStream().use { output ->
+                                    file.createNewFile()
+                                    file.outputStream().use { output ->
                                         input.copyTo(output)
                                     }
-                                    tmp.renameTo(file)
 
-                                    FileIndexer.indexFile(file)
+                                    LoggerFactory.getLogger("Upload").info("文件复制完毕 >> $file")
 
-                                    LoggerFactory.getLogger("Upload").info(
-                                        "文件接收完毕 >> $file"
-                                    )
+                                    if (fileHash.isNullOrBlank()) {
+                                        FileIndexer.addFileIndex(file)
+                                    } else {
+                                        DatabaseFactory.fileHashDao.put(
+                                            file.absolutePath,
+                                            fileHash,
+                                            folder.absolutePath
+                                        )
+                                    }
                                 }
+                                //丢弃缓存文件
+                                part.dispose.invoke()
                             }
                         }
                     }

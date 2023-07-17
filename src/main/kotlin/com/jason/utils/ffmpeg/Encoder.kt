@@ -1,12 +1,11 @@
 package com.jason.utils.ffmpeg
 
 import com.jason.utils.Configure
-import com.jason.utils.formatPath
-import com.jason.utils.symbolicPath
-import com.jason.utils.toMd5String
+import com.jason.utils.extension.formatPath
+import com.jason.utils.extension.symbolicPath
+import com.jason.utils.extension.toMd5String
 import org.slf4j.LoggerFactory
 import java.io.File
-import kotlin.math.roundToInt
 
 class Encoder(ffmpeg: String = "ffmpeg") {
     private val params = ArrayList<String>()

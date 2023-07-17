@@ -1,6 +1,9 @@
-package com.jason.utils
+package com.jason.utils.extension
 
+import com.jason.model.FileNavigationEntity
 import com.jason.model.findFirstMedia
+import com.jason.utils.Configure
+import com.jason.utils.MediaType
 import com.jason.utils.ffmpeg.Encoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,7 +17,7 @@ import java.security.MessageDigest
 
 inline val File.children: List<File>
     get() {
-        return listFiles()?.toList() ?: emptyList()
+        return listFiles()?.toList().orEmpty()
     }
 
 fun File.allChildren(): List<File> {
@@ -120,6 +123,28 @@ fun File.isSymlink(): Boolean {
     return Files.isSymbolicLink(toPath())
 }
 
+
+fun File.toNavigation(): ArrayList<FileNavigationEntity> {
+    fun File.listNavigation2(): ArrayList<FileNavigationEntity> {
+        return ArrayList<FileNavigationEntity>().apply {
+            val par = this@listNavigation2.parentFile
+            if (par != null && par.absolutePath.startsWith(Configure.rootDir.absolutePath)) {
+                addAll(par.listNavigation2())
+                add(FileNavigationEntity(par.name, par.absolutePath.toMd5String()))
+            }
+        }
+    }
+
+    return ArrayList<FileNavigationEntity>().apply {
+        addAll(listNavigation2())
+        add(
+            FileNavigationEntity(
+                this@toNavigation.name,
+                this@toNavigation.absolutePath.toMd5String()
+            )
+        )
+    }
+}
 
 suspend fun File.createGif(): File? = withContext(Dispatchers.IO) {
     if (isFile.not()) {

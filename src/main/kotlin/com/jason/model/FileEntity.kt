@@ -3,7 +3,8 @@ package com.jason.model
 import com.jason.database.DatabaseFactory
 import com.jason.utils.ListSort
 import com.jason.utils.MediaType
-import com.jason.utils.children
+import com.jason.utils.extension.children
+import com.jason.utils.extension.createSketchedMD5String
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.util.*
@@ -24,19 +25,25 @@ data class FileEntity(
 
 suspend fun List<File>.toFileEntities(sort: ListSort = ListSort.DATE): List<FileEntity> {
     return ArrayList<FileEntity>().apply {
-        this@toFileEntities.sort(sort).forEach {
-            val hash = DatabaseFactory.fileHashDao.getHash(it.absolutePath)
-            val children = it.children
+        this@toFileEntities.sort(sort).forEach { file ->
+            val hash = DatabaseFactory.fileHashDao.getHash(file.absolutePath).ifBlank {
+                file.createSketchedMD5String().also {
+                    DatabaseFactory.fileHashDao.put(
+                        file.absolutePath, it, file.parent.orEmpty()
+                    )
+                }
+            }
+            val children = file.children
             val first: File? = children.findFirstMedia()
             add(
                 FileEntity(
-                    name = it.name,
-                    path = it.absolutePath,
+                    name = file.name,
+                    path = file.absolutePath,
                     hash = hash,
-                    size = it.length(),
-                    date = it.lastModified(),
-                    isFile = it.isFile,
-                    isDirectory = it.isDirectory,
+                    size = file.length(),
+                    date = file.lastModified(),
+                    isFile = file.isFile,
+                    isDirectory = file.isDirectory,
                     childCount = children.size,
                     firstFileHash = if (first == null) "" else DatabaseFactory.fileHashDao.getHash(first.absolutePath),
                     firstFileType = if (first == null) MediaType.Media.UNKNOWN else MediaType.getMediaType(first.name)
