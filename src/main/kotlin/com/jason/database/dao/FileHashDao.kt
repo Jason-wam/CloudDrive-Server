@@ -7,9 +7,9 @@ interface FileHashDao {
 
     suspend fun isExistHash(hash: String): Boolean
 
-    suspend fun put(path: String, hash: String, parent: String): Boolean
+    suspend fun put(path: String, hash: String, parent: String, type: String, root: String): Boolean
 
-    suspend fun getPath(hash: String): String
+    suspend fun getPath(hash: String): List<String>
 
     suspend fun getPath(hash: String, parent: String): String
 

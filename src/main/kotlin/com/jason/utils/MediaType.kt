@@ -10,7 +10,7 @@ object MediaType {
     private val mimeTypeDatabase = listOf(".mdb", ".mdf", ".db", ".dbf", ".wdb", ".sql")
     private val mimeTypeTorrent = listOf(".torrent")
     private val mimeTypeText = listOf(
-        ".txt", ".text", ".md", ".xml", ".ini", ".log", ".csv", ".json", ".lrc",".yml",
+        ".txt", ".text", ".md", ".xml", ".ini", ".log", ".csv", ".json", ".lrc", ".yml",
         ".markdown"
     )
     private val mimeTypeAudio = listOf(
@@ -34,12 +34,15 @@ object MediaType {
     private val mimeTypeWord = listOf(
         ".docx", ".dotx", ".dox", ".wps", ".dot", ".wpt", ".docm", ".dotm", ".doc", ".rtf"
     )
+    private val mimeTypeFONT = listOf(".ttf", ".otf", ".eot", ".font", ".ttc", ".woff")
+    private val mimeTypeWEB = listOf(".html", ".htm", ".url", ".php", ".jsp", ".css", ".js")
     private val mimeTypeEXE = listOf(
-        ".exe", ".cmd", ".bat", ".reg", ".vds", ".shell", ".com",".dll",".sys", ".dmg", ".app"
+        ".exe", ".cmd", ".bat", ".reg", ".vds", ".shell", ".com", ".dll", ".sys", ".dmg", ".app"
     )
 
     enum class Media {
-        VIDEO, IMAGE, AUDIO, COMPRESS, PPT, TEXT, WORD, EXCEL, APPLICATION, DATABASE, TORRENT, EXE, UNKNOWN
+        VIDEO, IMAGE, AUDIO, COMPRESS, PPT, TEXT, WORD, EXCEL, APPLICATION, DATABASE, TORRENT, EXE, WEB,
+        FONT, FOLDER, UNKNOWN
     }
 
     fun getMediaType(fileName: String): Media {
@@ -57,6 +60,8 @@ object MediaType {
             mimeTypeAPK.contains(extension) -> Media.APPLICATION
             mimeTypeTorrent.contains(extension) -> Media.TORRENT
             mimeTypeEXE.contains(extension) -> Media.EXE
+            mimeTypeWEB.contains(extension) -> Media.WEB
+            mimeTypeFONT.contains(extension) -> Media.FONT
             else -> Media.UNKNOWN
         }
     }

@@ -61,7 +61,7 @@ class MediaInfo {
 
         fun create(path: String): MediaInfo {
             val params = ArrayList<String>()
-            params.add(Configure.ffprobe)
+            params.add(Configure.ffProbe)
             params.add("-v error")
             params.add("-select_streams v")
             params.add("-show_format")

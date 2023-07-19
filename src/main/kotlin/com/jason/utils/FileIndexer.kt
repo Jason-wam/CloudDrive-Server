@@ -16,10 +16,13 @@ object FileIndexer {
 
     suspend fun indexFiles() {
         LoggerFactory.getLogger(name).info("正在建立文件索引，可能占用较长时间...")
+        deleteNotRootData()
+
         var index = 0
+        val rootDir = Configure.rootDir.absolutePath
         listFiles(Configure.rootDir) {
             index += 1
-            addFileIndex(it)
+            addFileIndex(it, rootDir)
             if (index % 100 == 0) {
                 LoggerFactory.getLogger(name).info("正在建立文件索引: $index ..")
             }
@@ -31,8 +34,9 @@ object FileIndexer {
      * 重新扫描指定目录以更新文件列表索引
      */
     suspend fun indexDirectory(file: File) {
+        val rootDir = Configure.rootDir.absolutePath
         if (file.isDirectory) {
-            addFileIndex(file)
+            addFileIndex(file, rootDir)
 
             //读取当前目录已索引的文件列表
             val indexedList = DatabaseFactory.fileHashDao.getPathByParent(file.absolutePath)
@@ -42,7 +46,7 @@ object FileIndexer {
                 if (indexed.exists().not()) {
                     //如果已索引的文件不存在了则从数据库中删除
                     DatabaseFactory.fileHashDao.delete(indexed.absolutePath)
-                    LoggerFactory.getLogger(name).info("删除不存在的文件索引: ${indexed.absolutePath}！")
+                    LoggerFactory.getLogger(name).info("删除不存在的文件索引: ${indexed.absolutePath}")
                 } else {
                     if (indexed.isSymlink()) { //如果文件是符号链接
                         val path = Files.readSymbolicLink(indexed.toPath())
@@ -64,7 +68,7 @@ object FileIndexer {
                 indexedList.contains(it.absolutePath).not()
             }?.forEach {
                 //遍历不存在的文件重新添加文件索引
-                addFileIndex(it)
+                addFileIndex(it, rootDir)
                 LoggerFactory.getLogger(name).info("添加文件索引: ${it.absolutePath}！")
             }
         }
@@ -85,17 +89,21 @@ object FileIndexer {
         }
     }
 
-    suspend fun scanDatabaseRows() {
-        LoggerFactory.getLogger(name).info("正在整理数据库，可能占用较长时间...")
-
+    /**
+     * 删除非RootDir下的文件索引
+     */
+    private suspend fun deleteNotRootData() {
         DatabaseFactory.dbQuery {
-            val deleted = DatabaseFactory.fileHashDao.deleteByNotRoot(
-                Configure.rootDir.absolutePath
-            )
+            val deleted = DatabaseFactory.fileHashDao.deleteByNotRoot(Configure.rootDir.absolutePath)
             if (deleted > 0) {
                 LoggerFactory.getLogger(name).info("移除 $deleted 条旧索引 ..")
             }
         }
+    }
+
+    suspend fun scanDatabaseRows() {
+        LoggerFactory.getLogger(name).info("正在整理数据库，可能占用较长时间...")
+        deleteNotRootData()
 
         DatabaseFactory.dbQuery {
             DatabaseFactory.fileHashDao.queryAll().map {
@@ -121,18 +129,15 @@ object FileIndexer {
             }
         }
 
-
-        LoggerFactory.getLogger(name).info("整理数据库完毕！")
+        LoggerFactory.getLogger(name).info("数据库整理完毕！")
     }
 
     private suspend fun listFiles(file: File, block: suspend (file: File) -> Unit) {
         block.invoke(file)
         file.listFiles()?.forEach {
+            block.invoke(it)
             if (it.isDirectory) {
                 listFiles(it, block)
-            } else {
-                addFileIndex(it)
-                block.invoke(it)
             }
         }
     }
@@ -144,7 +149,7 @@ object FileIndexer {
         LoggerFactory.getLogger(name).info("重建文件索引完毕！")
     }
 
-    suspend fun addFileIndex(file: File) {
+    suspend fun addFileIndex(file: File, root: String) {
         try {
             if (file.exists().not()) {
                 DatabaseFactory.fileHashDao.delete(file.absolutePath)
@@ -154,18 +159,32 @@ object FileIndexer {
                         DatabaseFactory.fileHashDao.put(
                             file.absolutePath,
                             file.absolutePath.toMd5String(),
-                            file.parent.orEmpty()
+                            file.parent.orEmpty(),
+                            MediaType.Media.FOLDER.name,
+                            root
                         )
                     } else {
                         DatabaseFactory.fileHashDao.put(
                             file.absolutePath,
                             file.createSketchedMD5String(),
-                            file.parent.orEmpty()
+                            file.parent.orEmpty(),
+                            MediaType.getMediaType(file.name).name,
+                            root
                         )
                     }
                 }
             }
         } catch (ignore: Exception) {
         }
+    }
+
+    suspend fun addFileIndex(file: File, hash: String, root: String) {
+        DatabaseFactory.fileHashDao.put(
+            file.absolutePath,
+            hash,
+            file.parent.orEmpty(),
+            MediaType.getMediaType(file.name).name,
+            root
+        )
     }
 }

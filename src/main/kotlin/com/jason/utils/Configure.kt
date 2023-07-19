@@ -1,43 +1,44 @@
 package com.jason.utils
 
-import org.json.JSONObject
 import java.io.File
+import java.util.*
 
 object Configure {
+    val tmpDir: File = File(System.getProperty("java.io.tmpdir"))
     val userDir: File = File(System.getProperty("user.dir"))
-    var rootDir: File = File(userDir, "root")
-    var cacheDir: File = File(userDir, "cache")
-    var thumbDir: File = File(cacheDir, "thumbnail")
-    var ffmpeg: String = "ffmpeg"
-    var ffprobe: String = "ffprobe"
-
-    fun init() {
-
-        var configureJSON = ClassLoader.getSystemResource("configure.json").readText()
-
-        val configure = File(userDir, "configure.json")
-        if (configure.exists()) {
-            configureJSON = configure.readText()
-        } else {
-            configure.createNewFile()
-            configure.writeText(configureJSON)
+    val cacheDir: File = File(tmpDir, "VirtualDrive").also { it.mkdirs() }
+    var thumbDir: File = File(cacheDir, "thumbnail").also { it.mkdirs() }
+    val properties by lazy {
+        Properties().apply {
+            val configure = File(userDir, "configure.xml")
+            if (configure.exists()) {
+                configure.inputStream().use {
+                    loadFromXML(it)
+                }
+            } else {
+                setProperty("ffmpeg", "ffmpeg")
+                setProperty("ffprobe", "ffprobe")
+                setProperty("rootDir", "%VirtualDrive")
+                storeToXML(configure.outputStream(), "虚拟云盘配置文件")
+            }
         }
+    }
 
-        println("Configure: $configureJSON")
+    val ffmpeg: String by lazy {
+        properties.getProperty("ffmpeg", "ffmpeg")
+    }
 
-        val obj = JSONObject(configureJSON)
-        val root = obj.getString("rootDir")
+    val ffProbe: String by lazy {
+        properties.getProperty("ffprobe", "ffprobe")
+    }
 
-        ffmpeg = obj.getString("ffmpeg")
-        ffprobe = obj.getString("ffprobe")
-        rootDir = if (root.startsWith("%")) {
-            File(userDir, root.removePrefix("%"))
-        } else {
-            File(root)
+    val rootDir: File by lazy {
+        properties.getProperty("rootDir", "%VirtualDrive").let {
+            if (it.startsWith("%")) {
+                File(userDir, it.removePrefix("%"))
+            } else {
+                File(it)
+            }
         }
-
-        rootDir.mkdirs()
-        cacheDir = File(userDir, "cache").also { it.mkdirs() }
-        thumbDir = File(cacheDir, "thumbnail").also { it.mkdirs() }
     }
 }

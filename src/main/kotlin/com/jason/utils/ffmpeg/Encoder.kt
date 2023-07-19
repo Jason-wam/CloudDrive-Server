@@ -203,7 +203,6 @@ class Encoder(ffmpeg: String = "ffmpeg") {
         return this
     }
 
-
     /**
      * 指定视频帧率/s
      */

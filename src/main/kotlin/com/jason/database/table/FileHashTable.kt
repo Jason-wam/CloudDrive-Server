@@ -8,6 +8,7 @@ object FileHashTable : Table() {
     val parent = text("parent")
     val hash = varchar("hash", 32)
     val timestamp = long("timestamp")
+    val type = text("type")
 
     override val primaryKey: PrimaryKey = PrimaryKey(path)
 }

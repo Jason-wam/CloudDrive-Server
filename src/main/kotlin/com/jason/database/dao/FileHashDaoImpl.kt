@@ -20,20 +20,24 @@ class FileHashDaoImpl : FileHashDao {
         }.count() > 0
     }
 
-    override suspend fun put(path: String, hash: String, parent: String): Boolean = DatabaseFactory.dbQuery {
-        FileHashTable.replace {
-            it[FileHashTable.path] = path
-            it[FileHashTable.hash] = hash
-            it[FileHashTable.root] = Configure.rootDir.absolutePath
-            it[FileHashTable.parent] = parent
-            it[FileHashTable.timestamp] = System.currentTimeMillis()
-        }.insertedCount > 0
-    }
+    override suspend fun put(path: String, hash: String, parent: String, type: String, root: String): Boolean =
+        DatabaseFactory.dbQuery {
+            FileHashTable.replace {
+                it[FileHashTable.path] = path
+                it[FileHashTable.hash] = hash
+                it[FileHashTable.root] = root
+                it[FileHashTable.parent] = parent
+                it[FileHashTable.timestamp] = System.currentTimeMillis()
+                it[FileHashTable.type] = type
+            }.insertedCount > 0
+        }
 
-    override suspend fun getPath(hash: String): String = DatabaseFactory.dbQuery {
+    override suspend fun getPath(hash: String): List<String> = DatabaseFactory.dbQuery {
         FileHashTable.select {
             FileHashTable.hash eq hash
-        }.firstOrNull()?.getOrNull(FileHashTable.path).orEmpty()
+        }.map {
+            it[FileHashTable.path]
+        }
     }
 
     override suspend fun getPath(hash: String, parent: String): String = DatabaseFactory.dbQuery {
