@@ -6,7 +6,7 @@ import java.util.*
 object Configure {
     val tmpDir: File = File(System.getProperty("java.io.tmpdir"))
     val userDir: File = File(System.getProperty("user.dir"))
-    val cacheDir: File = File(tmpDir, "VirtualDrive").also { it.mkdirs() }
+    val cacheDir: File = File(tmpDir, "MyDrive").also { it.mkdirs() }
     var thumbDir: File = File(cacheDir, "thumbnail").also { it.mkdirs() }
     val properties by lazy {
         Properties().apply {
@@ -33,7 +33,7 @@ object Configure {
     }
 
     val rootDir: File by lazy {
-        properties.getProperty("rootDir", "%VirtualDrive").let {
+        properties.getProperty("rootDir", "%MyDrive").let {
             if (it.startsWith("%")) {
                 File(userDir, it.removePrefix("%"))
             } else {

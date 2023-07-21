@@ -276,12 +276,14 @@ fun Application.configureRouting() {
                     LoggerFactory.getLogger("Upload").info("正在接收文件到缓存...")
                     val parts = call.receiveMultipart().readAllParts()
                     if (parts.isEmpty()) {
-                        call.respond(CodeMessageRespondEntity(403, "未读取到上传的文件内容！"))
+                        call.respond(CodeMessageRespondEntity(403, "未读接收到上传内容！"))
                     } else {
-                        call.respond(CodeMessageRespondEntity(200, "文件上传完毕！"))
-                        parts.forEach { part ->
-                            try {
-                                if (part is PartData.FileItem) {
+                        val fileItemList = parts.filterIsInstance<PartData.FileItem>()
+                        if (fileItemList.isEmpty()) {
+                            call.respond(CodeMessageRespondEntity(403, "未读取到文件内容！"))
+                        } else {
+                            fileItemList.forEach { part ->
+                                try {
                                     val fileName = part.originalFileName ?: "${System.currentTimeMillis()}.data"
 
                                     LoggerFactory.getLogger("Upload").info(
@@ -307,13 +309,14 @@ fun Application.configureRouting() {
                                             )
                                         }
                                     }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                } finally {
+                                    //丢弃缓存文件
+                                    part.dispose.invoke()
                                 }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            } finally {
-                                //丢弃缓存文件
-                                part.dispose.invoke()
                             }
+                            call.respond(CodeMessageRespondEntity(200, "文件上传完毕！"))
                         }
                     }
                 }
