@@ -58,7 +58,7 @@ fun Application.configureRouting() {
                         Configure.rootDir.absolutePath,
                         Configure.rootDir.absolutePath,
                         Configure.rootDir.children.filter { if (showHidden) true else it.isHidden.not() }
-                            .toFileEntities(sort),
+                            .toFileEntities(Configure.rootDir.absolutePath, sort),
                         Configure.rootDir.toNavigation()
                     )
                 )
@@ -78,7 +78,7 @@ fun Application.configureRouting() {
                                 file.name,
                                 file.absolutePath,
                                 file.children.filter { if (showHidden) true else it.isHidden.not() }
-                                    .toFileEntities(sort),
+                                    .toFileEntities(file.absolutePath, sort),
                                 file.toNavigation()
                             )
                         )
@@ -160,34 +160,40 @@ fun Application.configureRouting() {
             }
         }
 
-        delete("/delete") {
+        get("/delete") {
             val hash = call.parameters["hash"]
+            val fileHash = call.parameters["fileHash"]
             if (hash.isNullOrBlank()) {
-                call.respond(CodeMessageRespondEntity(400, "BadRequest，hash不得为空！"))
+                call.respond(CodeMessageRespondEntity(400, "BadRequest，目录hash不得为空！"))
+                return@get
+            }
+            if (fileHash.isNullOrBlank()) {
+                call.respond(CodeMessageRespondEntity(400, "BadRequest，文件hash不得为空！"))
+                return@get
+            }
+
+            val parent = DatabaseFactory.fileHashDao.getPath(hash).let {
+                if (it.isEmpty()) "" else it.first()
+            }
+
+            val path = DatabaseFactory.fileHashDao.getPath(fileHash, parent)
+            if (path.isBlank()) {
+                call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定文件路径！"))
             } else {
-                val path = if (hash == "%root") {
-                    Configure.rootDir.absolutePath
-                } else {
-                    DatabaseFactory.fileHashDao.getPath(hash).find { File(it).exists() }.orEmpty()
-                }
-                if (path.isBlank()) {
-                    call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定文件路径！"))
-                } else {
-                    val filePath = File(path)
-                    if (filePath.isDirectory) {
-                        if (filePath.deleteRecursively()) {
-                            DatabaseFactory.fileHashDao.delete(path)
-                            call.respond(CodeMessageRespondEntity(200, "删除成功！"))
-                        } else {
-                            call.respond(CodeMessageRespondEntity(500, "删除失败！"))
-                        }
+                val filePath = File(path)
+                if (filePath.isDirectory) {
+                    if (filePath.deleteRecursively()) {
+                        DatabaseFactory.fileHashDao.delete(path)
+                        call.respond(CodeMessageRespondEntity(200, "删除成功！"))
                     } else {
-                        if (filePath.delete()) {
-                            DatabaseFactory.fileHashDao.delete(path)
-                            call.respond(CodeMessageRespondEntity(200, "删除成功！"))
-                        } else {
-                            call.respond(CodeMessageRespondEntity(500, "删除失败！"))
-                        }
+                        call.respond(CodeMessageRespondEntity(500, "删除失败！"))
+                    }
+                } else {
+                    if (filePath.delete()) {
+                        DatabaseFactory.fileHashDao.delete(path)
+                        call.respond(CodeMessageRespondEntity(200, "删除成功！"))
+                    } else {
+                        call.respond(CodeMessageRespondEntity(500, "删除失败！"))
                     }
                 }
             }

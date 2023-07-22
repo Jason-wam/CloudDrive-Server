@@ -25,6 +25,8 @@ interface FileHashDao {
 
     suspend fun getHashByParent(path: String): List<String>
 
+    suspend fun getHashMapByParent(path: String): HashMap<String,String>
+
     suspend fun getPathByParent(path: String): List<String>
 
     suspend fun clear(): Boolean

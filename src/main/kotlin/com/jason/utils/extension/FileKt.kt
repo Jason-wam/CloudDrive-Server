@@ -3,6 +3,7 @@ package com.jason.utils.extension
 import com.jason.model.FileNavigationEntity
 import com.jason.model.findFirstMedia
 import com.jason.utils.Configure
+import com.jason.utils.FileType
 import com.jason.utils.MediaType
 import com.jason.utils.ffmpeg.Encoder
 import kotlinx.coroutines.Dispatchers
@@ -199,7 +200,7 @@ suspend fun File.createGif(size: Int = -1): File? = withContext(Dispatchers.IO) 
         LoggerFactory.getLogger("Thumbnail").info("return original gif >> $absolutePath")
         return@withContext this@createGif
     } else {
-        if (MediaType.isVideo(this@createGif).not()) {
+        if (FileType.isVideo(this@createGif).not()) {
             return@withContext null
         } else {
             val image = File(Configure.thumbDir, "${path.toMd5String()}_x$imageSize.gif")
@@ -227,7 +228,7 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
             children.sortedByDescending<File, Long> {
                 it.lastModified()
             }.find<File> { file ->
-                MediaType.isAudio(file)
+                FileType.isAudio(file)
             }?.createThumbnail(imageSize)
         }
     }
@@ -252,7 +253,7 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
             return@withContext input
         }
 
-        if (MediaType.isVideo(input)) {
+        if (FileType.isVideo(input)) {
             val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
             return@withContext if (image.exists()) image else {
                 LoggerFactory.getLogger("Thumbnail").info("createThumbnail from video >> $absolutePath")
@@ -260,7 +261,7 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
                     .format("mjpeg").startAtHalfDuration(true).execute(image)
                 if (succeed) image else null
             }
-        } else if (MediaType.isImage(input)) {
+        } else if (FileType.isImage(input)) {
             if (length() < 200.KB) {
                 return@withContext input
             }
@@ -270,7 +271,7 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
                 val succeed = Encoder(Configure.ffmpeg).input(input).resize(imageSize).execute(image)
                 return@withContext if (succeed) image else input
             }
-        } else if (MediaType.isAudio(input)) {
+        } else if (FileType.isAudio(input)) {
             val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
             return@withContext if (image.exists()) image else {
                 LoggerFactory.getLogger("Thumbnail").info("createThumbnail from audio >> $absolutePath")

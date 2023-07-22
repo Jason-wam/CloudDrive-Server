@@ -84,6 +84,16 @@ class FileHashDaoImpl : FileHashDao {
         }
     }
 
+    override suspend fun getHashMapByParent(path: String): HashMap<String, String> = DatabaseFactory.dbQuery {
+        HashMap<String, String>().apply {
+            FileHashTable.select {
+                FileHashTable.parent eq path
+            }.map {
+                this[it[FileHashTable.path]] = it[FileHashTable.hash]
+            }
+        }
+    }
+
     override suspend fun getPathByParent(path: String): List<String> = DatabaseFactory.dbQuery {
         FileHashTable.select {
             FileHashTable.parent eq path

@@ -78,7 +78,7 @@ class MediaInfo {
             process.errorStream.close()
             process.destroy()
 
-//            println(json)
+            println(json)
             val obj = JSONObject(json)
             val formatObj = obj.optJSONObject("format")
             val streamsArray = obj.optJSONArray("streams")

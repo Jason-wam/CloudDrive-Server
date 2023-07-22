@@ -13,7 +13,6 @@ import java.nio.file.Files
 
 object FileIndexer {
     private const val name = "Indexer"
-
     suspend fun indexFiles() {
         LoggerFactory.getLogger(name).info("正在建立文件索引，可能占用较长时间...")
         deleteNotRootData()
@@ -160,7 +159,7 @@ object FileIndexer {
                             file.absolutePath,
                             file.absolutePath.toMd5String(),
                             file.parent.orEmpty(),
-                            MediaType.Media.FOLDER.name,
+                            FileType.Media.FOLDER.name,
                             root
                         )
                     } else {
@@ -168,7 +167,7 @@ object FileIndexer {
                             file.absolutePath,
                             file.createSketchedMD5String(),
                             file.parent.orEmpty(),
-                            MediaType.getMediaType(file.name).name,
+                            FileType.getMediaType(file.name).name,
                             root
                         )
                     }
@@ -183,7 +182,7 @@ object FileIndexer {
             file.absolutePath,
             hash,
             file.parent.orEmpty(),
-            MediaType.getMediaType(file.name).name,
+            FileType.getMediaType(file.name).name,
             root
         )
     }
