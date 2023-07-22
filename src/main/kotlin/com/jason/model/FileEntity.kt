@@ -4,11 +4,8 @@ import com.jason.database.DatabaseFactory
 import com.jason.utils.FileType
 import com.jason.utils.ListSort
 import com.jason.utils.extension.children
-import com.jason.utils.extension.isSymlink
 import kotlinx.serialization.Serializable
-import org.slf4j.LoggerFactory
 import java.io.File
-import java.util.*
 
 @Serializable
 data class FileEntity(
@@ -29,11 +26,13 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
     val hashMap = DatabaseFactory.fileHashDao.getHashMapByParent(parentPath)
     return ArrayList<FileEntity>().apply {
         this@toFileEntities.sort(sort).forEach { file ->
-//            val hash = DatabaseFactory.fileHashDao.getHash(file.absolutePath) //耗时操作，有待优化
             val hash = hashMap[file.absolutePath].orEmpty()
             if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
                 val children = if (file.isDirectory) file.children else null
                 val first: File? = children?.findFirstMedia()
+                val firstFileHash = if (first == null) "" else DatabaseFactory.fileHashDao.getHash(first.absolutePath)
+                val firstFileType = if (first == null) FileType.Media.UNKNOWN else FileType.getMediaType(first.name)
+
                 add(
                     FileEntity(
                         name = file.name,
@@ -44,8 +43,8 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
                         isFile = file.isFile,
                         isDirectory = file.isDirectory,
                         childCount = children?.size ?: 0,
-                        firstFileHash = if (first == null) "" else DatabaseFactory.fileHashDao.getHash(first.absolutePath),
-                        firstFileType = if (first == null) FileType.Media.UNKNOWN else FileType.getMediaType(first.name),
+                        firstFileHash = firstFileHash,
+                        firstFileType = firstFileType,
                         false
                     )
                 )
@@ -56,15 +55,13 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
 
 fun List<File>?.findFirstMedia(): File? {
     this ?: return null
-    return if (isEmpty()) null else sortedByName().run {
-        find { file ->
-            FileType.isVideo(file)
-        } ?: find { file ->
-            FileType.isImage(file)
-        } ?: find { file ->
-            FileType.isAudio(file)
-        } ?: first()
-    }
+    return if (isEmpty()) null else find { file ->
+        FileType.isVideo(file)
+    } ?: find { file ->
+        FileType.isImage(file)
+    } ?: find { file ->
+        FileType.isAudio(file)
+    } ?: first()
 }
 
 fun List<File>.sort(sort: ListSort): List<File> {
@@ -80,16 +77,40 @@ fun List<File>.sort(sort: ListSort): List<File> {
 
 fun List<File>.sortedByName(): List<File> {
     return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
+        .thenBy { it.name.findInt() + it.name.findChineseInt() }
         .thenBy { it.name }
-        .thenBy { if (it.isDirectory) 0 else it.name }
     )
 }
 
 fun List<File>.sortedByNameDESC(): List<File> {
     return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
+        .thenByDescending { it.name.findInt() + it.name.findChineseInt() }
         .thenByDescending { it.name }
-        .thenByDescending { if (it.isDirectory) 0 else it.name }
     )
+}
+
+fun String.findInt(): Int {
+    val values = "(\\d+)".toRegex().find(this)?.groupValues
+    return if ((values?.size ?: 0) > 0) values?.get(1)?.toInt() ?: 0 else 0
+}
+
+fun String.findChineseInt(): Int {
+    val regex = Regex("[一二三四五六七八九十]+")
+    var intNumber = 0
+    val matchResult = regex.find(this) ?: return 0
+    when (matchResult.value) {
+        "一" -> intNumber += 1
+        "二" -> intNumber += 2
+        "三" -> intNumber += 3
+        "四" -> intNumber += 4
+        "五" -> intNumber += 5
+        "六" -> intNumber += 6
+        "七" -> intNumber += 7
+        "八" -> intNumber += 8
+        "九" -> intNumber += 9
+        "十" -> intNumber += 10
+    }
+    return intNumber
 }
 
 fun List<File>.sortedBySize(): List<File> {

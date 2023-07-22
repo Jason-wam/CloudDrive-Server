@@ -59,6 +59,32 @@ class MediaInfo {
             return create(file.symbolicPath())
         }
 
+        fun createDetail(file: File): String? {
+            val params = ArrayList<String>()
+            params.add(Configure.ffProbe)
+            params.add("-v error")
+            params.add("-select_streams v")
+            params.add("-show_format")
+            params.add("-show_streams")
+            params.add("-i \"${file.symbolicPath()}\"")
+            params.add("-print_format json")
+            val command = params.joinToString(" ")
+            val process = Runtime.getRuntime().exec(command)
+            val json = process.inputStream.reader().use {
+                it.readText()
+            }
+
+            val result: String? = if (process.waitFor() != 0) { //0表示正常结束，1：非正常结束
+                null
+            } else {
+                json
+            }
+            process.inputStream.close()
+            process.errorStream.close()
+            process.destroy()
+            return result
+        }
+
         fun create(path: String): MediaInfo {
             val params = ArrayList<String>()
             params.add(Configure.ffProbe)
@@ -78,7 +104,6 @@ class MediaInfo {
             process.errorStream.close()
             process.destroy()
 
-            println(json)
             val obj = JSONObject(json)
             val formatObj = obj.optJSONObject("format")
             val streamsArray = obj.optJSONArray("streams")
@@ -125,8 +150,8 @@ class MediaInfo {
                                     isHdr = colorPrimaries.contains("bt2020") &&
                                             colorTransfer.contains("arib-std-b67") ||
                                             colorTransfer.contains(
-                                        "smpte2084"
-                                    )
+                                                "smpte2084"
+                                            )
                                 }
                                 stream.optJSONObject("tags")?.let { tags ->
                                     tags.keys().forEach { key ->

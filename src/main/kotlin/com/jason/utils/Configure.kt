@@ -6,7 +6,7 @@ import java.util.*
 object Configure {
     val tmpDir: File = File(System.getProperty("java.io.tmpdir"))
     val userDir: File = File(System.getProperty("user.dir"))
-    val cacheDir: File = File(tmpDir, "MyDrive").also { it.mkdirs() }
+    val cacheDir: File = File(tmpDir, "VirtualDrive").also { it.mkdirs() }
     var thumbDir: File = File(cacheDir, "thumbnail").also { it.mkdirs() }
     val properties by lazy {
         Properties().apply {
@@ -16,8 +16,8 @@ object Configure {
                     loadFromXML(it)
                 }
             } else {
-                setProperty("ffmpeg", "ffmpeg")
-                setProperty("ffprobe", "ffprobe")
+                setProperty("ffmpeg", "%ffmpeg/bin/ffmpeg")
+                setProperty("ffprobe", "%ffmpeg/bin/ffprobe")
                 setProperty("rootDir", "%VirtualDrive")
                 storeToXML(configure.outputStream(), "虚拟云盘配置文件")
             }
@@ -25,15 +25,27 @@ object Configure {
     }
 
     val ffmpeg: String by lazy {
-        properties.getProperty("ffmpeg", "ffmpeg")
+        properties.getProperty("ffmpeg", "%ffmpeg/bin/ffmpeg").let {
+            if (it.startsWith("%")) {
+                File(userDir, it.removePrefix("%")).absolutePath
+            } else {
+                it
+            }
+        }
     }
 
     val ffProbe: String by lazy {
-        properties.getProperty("ffprobe", "ffprobe")
+        properties.getProperty("ffprobe", "%ffmpeg/bin/ffprobe").let {
+            if (it.startsWith("%")) {
+                File(userDir, it.removePrefix("%")).absolutePath
+            } else {
+                it
+            }
+        }
     }
 
     val rootDir: File by lazy {
-        properties.getProperty("rootDir", "%MyDrive").let {
+        properties.getProperty("rootDir", "%VirtualDrive").let {
             if (it.startsWith("%")) {
                 File(userDir, it.removePrefix("%"))
             } else {

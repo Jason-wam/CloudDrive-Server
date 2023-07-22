@@ -6,17 +6,22 @@ import com.jason.plugins.configureRouting
 import com.jason.plugins.configureSerialization
 import com.jason.utils.Configure
 import com.jason.utils.FileIndexer
-import com.jason.utils.extension.MB
-import com.jason.utils.extension.createSketchedMD5String
+import com.jason.utils.ffmpeg.Encoder
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.io.File
 
 fun main() {
     DatabaseFactory.init()
+
+    LoggerFactory.getLogger("Configure").info("ffmpeg = ${Configure.ffmpeg}")
+    LoggerFactory.getLogger("Configure").info("ffProbe = ${Configure.ffProbe}")
+    LoggerFactory.getLogger("Configure")
+        .info("version = ${Encoder(Configure.ffmpeg).param("-version").execute().lines().first()}")
+    LoggerFactory.getLogger("Configure").info("TempDir = ${Configure.cacheDir}")
+
 
     runBlocking {
         FileIndexer.indexFiles()
@@ -29,12 +34,4 @@ fun Application.module() {
     configureHTTP()
     configureSerialization()
     configureRouting()
-}
-
-fun testBlake2() {
-    val time = System.currentTimeMillis()
-    val file = File("D:/VirtualDrive/CloudMusic/BEYOND - 海阔天空.flac")
-    val blake2 = file.createSketchedMD5String(20.MB)
-    println("blake2 = $blake2")
-    println("blake2 used:${System.currentTimeMillis() - time}")
 }

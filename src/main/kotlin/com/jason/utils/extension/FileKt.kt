@@ -4,7 +4,6 @@ import com.jason.model.FileNavigationEntity
 import com.jason.model.findFirstMedia
 import com.jason.utils.Configure
 import com.jason.utils.FileType
-import com.jason.utils.MediaType
 import com.jason.utils.ffmpeg.Encoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -137,18 +136,28 @@ fun File.createSymbolicLink(toDir: File, fileName: String, overwrite: Boolean = 
         return link
     }
 
-    Files.deleteIfExists(link.toPath())
-    Files.createSymbolicLink(link.toPath(), toPath())
+    try {
+        Files.deleteIfExists(link.toPath())
+        Files.createSymbolicLink(link.toPath(), toPath())
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return this
+    }
     return link
 }
 
-fun File.createSymbolicLink(toFilePath: File, overwrite: Boolean = false): File {
+fun File.createSymbolicLink(toFilePath: File, overwrite: Boolean = false): File? {
     if (Files.exists(toFilePath.toPath()) && !overwrite) {
         return toFilePath
     }
 
-    Files.deleteIfExists(toFilePath.toPath())
-    Files.createSymbolicLink(toFilePath.toPath(), toPath())
+    try {
+        Files.deleteIfExists(toFilePath.toPath())
+        Files.createSymbolicLink(toFilePath.toPath(), toPath())
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return null
+    }
     return toFilePath
 }
 
@@ -205,7 +214,7 @@ suspend fun File.createGif(size: Int = -1): File? = withContext(Dispatchers.IO) 
         } else {
             val image = File(Configure.thumbDir, "${path.toMd5String()}_x$imageSize.gif")
             return@withContext if (image.exists()) image else {
-                LoggerFactory.getLogger("Thumbnail").info("create gif from video >> $absolutePath")
+                LoggerFactory.getLogger("Thumbnail").info("create gif from video x$imageSize >> $absolutePath")
                 val succeed = Encoder(Configure.ffmpeg).input(this@createGif).fps(10).t(10f)
                     .resize(imageSize)
                     .threads(3)
@@ -219,7 +228,7 @@ suspend fun File.createGif(size: Int = -1): File? = withContext(Dispatchers.IO) 
 suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatchers.IO) {
     val imageSize = if (size > 0) size else 320
     if (isDirectory) {
-        LoggerFactory.getLogger("Thumbnail").info("createThumbnail from children >> $absolutePath")
+        LoggerFactory.getLogger("Thumbnail").info("createThumbnail from children x$imageSize >> $absolutePath")
 
         val mediaFile = children.findFirstMedia()
         return@withContext if (mediaFile != null) {
@@ -238,9 +247,9 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
         if (length() < 200.KB) {
             return@withContext input
         }
-        val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.gif")
+        val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}_x$imageSize.gif")
         return@withContext if (image.exists()) image else {
-            LoggerFactory.getLogger("Thumbnail").info("createThumbnail from gif >> $absolutePath")
+            LoggerFactory.getLogger("Thumbnail").info("createThumbnail from gif x$imageSize >> $absolutePath")
             val succeed = Encoder(Configure.ffmpeg).input(input).resize(imageSize)
                 .execute(image)
             if (succeed) image else input
@@ -254,29 +263,35 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
         }
 
         if (FileType.isVideo(input)) {
-            val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
+            val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}_x$imageSize.jpg")
             return@withContext if (image.exists()) image else {
-                LoggerFactory.getLogger("Thumbnail").info("createThumbnail from video >> $absolutePath")
-                val succeed = Encoder(Configure.ffmpeg).input(input).param("-frames 1").resize(imageSize)
+                LoggerFactory.getLogger("Thumbnail").info("createThumbnail from video x$imageSize >> $absolutePath")
+                val succeed = Encoder(Configure.ffmpeg).input(input).param("-frames:v 1").resize(imageSize)
                     .format("mjpeg").startAtHalfDuration(true).execute(image)
-                if (succeed) image else null
+                if (succeed) image else {
+                    image.createNewFile() //获取失败后创建占位文件，防止每次都重复转码
+                    null
+                }
             }
         } else if (FileType.isImage(input)) {
             if (length() < 200.KB) {
                 return@withContext input
             }
-            val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
+            val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}_x$imageSize.jpg")
             return@withContext if (image.exists()) image else {
-                LoggerFactory.getLogger("Thumbnail").info("createThumbnail from image >> $absolutePath")
+                LoggerFactory.getLogger("Thumbnail").info("createThumbnail from image x$imageSize >> $absolutePath")
                 val succeed = Encoder(Configure.ffmpeg).input(input).resize(imageSize).execute(image)
-                return@withContext if (succeed) image else input
+                if (succeed) image else input
             }
         } else if (FileType.isAudio(input)) {
-            val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}.jpg")
+            val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}_x$imageSize.jpg")
             return@withContext if (image.exists()) image else {
-                LoggerFactory.getLogger("Thumbnail").info("createThumbnail from audio >> $absolutePath")
+                LoggerFactory.getLogger("Thumbnail").info("createThumbnail from audio x$imageSize >> $absolutePath")
                 val succeed = Encoder(Configure.ffmpeg).input(input).resize(imageSize).execute(image)
-                if (succeed) image else null
+                if (succeed) image else {
+                    image.createNewFile() //获取失败后创建占位文件，防止每次都重复转码
+                    null
+                }
             }
         } else {
             LoggerFactory.getLogger("Thumbnail").error("unsupported media type >> $absolutePath")

@@ -121,6 +121,7 @@ class Encoder(ffmpeg: String = "ffmpeg") {
 
     fun input(file: File): Encoder {
         params.add("-i \"${file.symbolicPath()}\"")
+//        params.add("-i \"${file.absolutePath.formatPath()}\"")
         if (duration == 0f) {
             duration = MediaInfo.create(file).format.duration.toFloat()
         }
@@ -441,44 +442,61 @@ class Encoder(ffmpeg: String = "ffmpeg") {
         return execute(File(path))
     }
 
-    fun execute(output: File): Boolean {
-        if (output.exists() && overwrite.not()) {
-            return true
-        } else if (output.exists()) {
-            output.delete()
+    fun execute(): String {
+        var line: String?
+        val error = StringBuilder()
+        val process = Runtime.getRuntime().exec(params.joinToString(" "))
+        val reader = process.inputStream.bufferedReader()
+        while (reader.readLine().also { line = it } != null) {
+            error.appendLine(line)
         }
+        process.waitFor()
+        return error.toString()
+    }
 
-        if (startAtHalfDuration) {
-            params.indexOfFirst {
-                it.startsWith("-i")
-            }.also {
-                if (it != -1) {
-                    params.add(it, "-ss ${duration / 2f}")
+    fun execute(output: File): Boolean {
+        try {
+            if (output.exists() && overwrite.not()) {
+                return true
+            } else if (output.exists()) {
+                output.delete()
+            }
+
+            if (startAtHalfDuration) {
+                params.indexOfFirst {
+                    it.startsWith("-i")
+                }.also {
+                    if (it != -1) {
+                        params.add(it, "-ss ${duration / 2f}")
+                    }
                 }
             }
-        }
 
-        val cache = File(output.parent, output.absolutePath.toMd5String() + ".${output.extension}")
-        params.add("-y")
-        params.add("\"${cache.absolutePath.formatPath()}\"")
+            val cache = File(output.parent, output.absolutePath.toMd5String() + ".${output.extension}")
+            params.add("-y")
+            params.add("\"${cache.absolutePath.formatPath()}\"")
 
-        execute(params.joinToString(" ")).also {
-            return if (it.first) {
-                LoggerFactory.getLogger("Encoder").info("转码成功: >> ${output.name}")
-                cache.renameTo(output)
-                true
-            } else {
-                LoggerFactory.getLogger("Encoder").error("转码失败: ${output.name} >> ${it.second}")
-                cache.delete()
-                false
+            execute(params.joinToString(" ")).also {
+                return if (it.first) {
+                    LoggerFactory.getLogger("Encoder").info("转码成功: >> ${output.name}")
+                    cache.renameTo(output)
+                    true
+                } else {
+                    LoggerFactory.getLogger("Encoder").error("转码失败: ${output.name} >> ${it.second}")
+                    cache.delete()
+                    false
+                }
             }
+        } catch (e: Exception) {
+            LoggerFactory.getLogger("Encoder").error("转码失败: ${output.name} >> ${e.stackTraceToString()}")
+            return false
         }
     }
 
     private fun execute(command: String): Pair<Boolean, String> {
+        LoggerFactory.getLogger("Encoder").info("开始执行: $command")
         tryToBuildDurationWithStartAndTo()
 
-        LoggerFactory.getLogger("Encoder").info("开始执行: $command")
         var line: String?
         val error = StringBuilder()
         val process = Runtime.getRuntime().exec(command)

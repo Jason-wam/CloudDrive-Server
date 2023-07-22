@@ -4,20 +4,20 @@ import com.jason.database.DatabaseFactory
 import com.jason.model.CodeMessageRespondEntity
 import com.jason.model.FileListRespondEntity
 import com.jason.model.toFileEntities
-import com.jason.utils.*
+import com.jason.utils.Configure
+import com.jason.utils.FileIndexer
+import com.jason.utils.FileType
+import com.jason.utils.ListSort
 import com.jason.utils.extension.*
+import com.jason.utils.ffmpeg.MediaInfo
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.util.*
-import io.ktor.utils.io.core.*
-import kotlinx.coroutines.flow.asFlow
 import org.slf4j.LoggerFactory
 import java.io.File
-import kotlin.io.use
 
 fun Application.configureRouting() {
     routing {
@@ -105,6 +105,7 @@ fun Application.configureRouting() {
                         call.setContentDisposition(file.name)
                         call.respondFile(thumbnail)
                     } else {
+                        LoggerFactory.getLogger("Encoder").error("thumbnail创建未成功！")
                         call.respond(HttpStatusCode.InternalServerError)
                     }
                 }
@@ -126,6 +127,34 @@ fun Application.configureRouting() {
                         call.respondFile(file)
                     } else {
                         call.respond(HttpStatusCode.NotFound, "NotFound，文件不存在！")
+                    }
+                }
+            }
+        }
+
+        get("/mediaInfo") {
+            val hash = call.parameters["hash"]
+            if (hash.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, "BadRequest，hash不得为空！")
+            } else {
+                val path = DatabaseFactory.fileHashDao.getPath(hash).find { File(it).exists() }.orEmpty()
+                if (path.isBlank()) {
+                    call.respond(HttpStatusCode.NotFound, "NotFound，未查找到指定文件路径！")
+                } else {
+                    val file = File(path)
+                    if (file.exists().not()) {
+                        call.respond(CodeMessageRespondEntity(404, "文件不存在！"))
+                    } else {
+                        if (FileType.isMedia(file).not()) {
+                            call.respond(CodeMessageRespondEntity(403, "不支持的媒体类型！"))
+                        } else {
+                            val detail = MediaInfo.createDetail(file)
+                            if (detail.isNullOrBlank()) {
+                                call.respond(CodeMessageRespondEntity(500, "获取媒体信息失败！"))
+                            } else {
+                                call.respondText(detail, ContentType.Application.Json, HttpStatusCode.OK)
+                            }
+                        }
                     }
                 }
             }
