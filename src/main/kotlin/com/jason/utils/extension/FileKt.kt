@@ -230,7 +230,7 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
     if (isDirectory) {
         LoggerFactory.getLogger("Thumbnail").info("createThumbnail from children x$imageSize >> $absolutePath")
 
-        val mediaFile = children.findFirstMedia()
+        val mediaFile = children.sortedByDescending { it.lastModified() }.findFirstMedia()
         return@withContext if (mediaFile != null) {
             mediaFile.createThumbnail(imageSize)
         } else { //如果不存在视频或图片则尝试从音频中读取专辑封面
@@ -244,7 +244,7 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
 
     val input = this@createThumbnail
     if (name.endsWith(".gif", true)) {
-        if (length() < 200.KB) {
+        if (length() < 3.MB) { //如果图片大小小于3MB则返回原文件
             return@withContext input
         }
         val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}_x$imageSize.gif")
@@ -268,13 +268,10 @@ suspend fun File.createThumbnail(size: Int = -1): File? = withContext(Dispatcher
                 LoggerFactory.getLogger("Thumbnail").info("createThumbnail from video x$imageSize >> $absolutePath")
                 val succeed = Encoder(Configure.ffmpeg).input(input).param("-frames:v 1").resize(imageSize)
                     .format("mjpeg").startAtHalfDuration(true).execute(image)
-                if (succeed) image else {
-                    image.createNewFile() //获取失败后创建占位文件，防止每次都重复转码
-                    null
-                }
+                if (succeed) image else null
             }
         } else if (FileType.isImage(input)) {
-            if (length() < 200.KB) {
+            if (length() < 1.MB) { //如果图片大小小于1MB则返回原文件
                 return@withContext input
             }
             val image = File(Configure.thumbDir, "${absolutePath.toMd5String()}_x$imageSize.jpg")

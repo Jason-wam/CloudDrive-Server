@@ -6,6 +6,7 @@ import com.jason.utils.ListSort
 import com.jason.utils.extension.children
 import kotlinx.serialization.Serializable
 import java.io.File
+import java.text.Collator
 
 @Serializable
 data class FileEntity(
@@ -25,14 +26,17 @@ data class FileEntity(
 suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListSort.DATE): List<FileEntity> {
     val hashMap = DatabaseFactory.fileHashDao.getHashMapByParent(parentPath)
     return ArrayList<FileEntity>().apply {
-        this@toFileEntities.sort(sort).forEach { file ->
+        //根据文件夹和文件进行分组
+        val group = this@toFileEntities.groupedByIsDirectory()
+
+        //先展示文件夹
+        group[true]?.sort(sort).orEmpty().forEach { file ->
             val hash = hashMap[file.absolutePath].orEmpty()
             if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
-                val children = if (file.isDirectory) file.children else null
-                val first: File? = children?.findFirstMedia()
+                val children = file.children
+                val first: File? = children.findFirstMedia()
                 val firstFileHash = if (first == null) "" else DatabaseFactory.fileHashDao.getHash(first.absolutePath)
                 val firstFileType = if (first == null) FileType.Media.UNKNOWN else FileType.getMediaType(first.name)
-
                 add(
                     FileEntity(
                         name = file.name,
@@ -42,9 +46,31 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
                         date = file.lastModified(),
                         isFile = file.isFile,
                         isDirectory = file.isDirectory,
-                        childCount = children?.size ?: 0,
+                        childCount = children.size,
                         firstFileHash = firstFileHash,
                         firstFileType = firstFileType,
+                        false
+                    )
+                )
+            }
+        }
+
+        //然后展示文件
+        group[false]?.sort(sort).orEmpty().forEach { file ->
+            val hash = hashMap[file.absolutePath].orEmpty()
+            if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
+                add(
+                    FileEntity(
+                        name = file.name,
+                        path = file.absolutePath,
+                        hash = hash,
+                        size = file.length(),
+                        date = file.lastModified(),
+                        isFile = file.isFile,
+                        isDirectory = file.isDirectory,
+                        childCount = 0,
+                        firstFileHash = "",
+                        firstFileType = FileType.Media.UNKNOWN,
                         false
                     )
                 )
@@ -75,27 +101,50 @@ fun List<File>.sort(sort: ListSort): List<File> {
     }
 }
 
+fun List<File>.groupedByIsDirectory(): Map<Boolean, List<File>> {
+    return groupBy {
+        it.isDirectory
+    }
+}
+
 fun List<File>.sortedByName(): List<File> {
-    return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
-        .thenBy { it.name.findInt() + it.name.findChineseInt() }
-        .thenBy { it.name }
-    )
+    val collator = Collator.getInstance()
+    return sortedWith(compareBy<File> {
+        it.nameWithoutExtension.findStartNumber()
+    }.thenBy {
+        it.name.findChineseNumber()
+    }.thenComparator { a, b ->
+        collator.compare(a.name, b.name)
+    }.thenBy {
+        it.nameWithoutExtension.firstNumber()
+    })
 }
 
 fun List<File>.sortedByNameDESC(): List<File> {
-    return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
-        .thenByDescending { it.name.findInt() + it.name.findChineseInt() }
-        .thenByDescending { it.name }
-    )
+    return sortedByName().reversed()
 }
 
-fun String.findInt(): Int {
-    val values = "(\\d+)".toRegex().find(this)?.groupValues
-    return if ((values?.size ?: 0) > 0) values?.get(1)?.toInt() ?: 0 else 0
+fun String.hasNumber(): Boolean {
+    return "(\\d+)".toRegex().find(this)?.groupValues?.isNotEmpty() == true
 }
 
-fun String.findChineseInt(): Int {
-    val regex = Regex("[一二三四五六七八九十]+")
+fun String.startWithNumber(): Boolean {
+    return "^\\d+".toRegex().find(this)?.groupValues?.isNotEmpty() == true
+}
+
+fun String.findStartNumber(): Long {
+    return "^\\d+".toRegex().find(this)?.groupValues?.first()?.toLong() ?: 0
+}
+
+fun String.firstNumber(): Long {
+    val values = "(\\d+)".toRegex().find(this)?.groupValues?.map {
+        it.toLong()
+    }
+    return values?.firstOrNull() ?: 0
+}
+
+fun String.findChineseNumber(): Int {
+    val regex = Regex("[一二三四五六七八九十百千壹贰叁肆伍陆柒捌玖拾佰仟]+")
     var intNumber = 0
     val matchResult = regex.find(this) ?: return 0
     when (matchResult.value) {
@@ -109,38 +158,42 @@ fun String.findChineseInt(): Int {
         "八" -> intNumber += 8
         "九" -> intNumber += 9
         "十" -> intNumber += 10
+        "百" -> intNumber += 100
+        "千" -> intNumber += 1000
+        "壹" -> intNumber += 1
+        "贰" -> intNumber += 2
+        "叁" -> intNumber += 3
+        "肆" -> intNumber += 4
+        "伍" -> intNumber += 5
+        "陆" -> intNumber += 6
+        "柒" -> intNumber += 7
+        "捌" -> intNumber += 8
+        "玖" -> intNumber += 9
+        "拾" -> intNumber += 10
+        "佰" -> intNumber += 100
+        "仟" -> intNumber += 1000
     }
     return intNumber
 }
 
 fun List<File>.sortedBySize(): List<File> {
-    return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
-        .thenBy { it.listFiles()?.size ?: 0 } // 子项数量排序
-        .thenBy { if (it.isDirectory) 0 else it.length() } // 文件大小排序
-        .thenBy { it.name } // 文件名排序
-    )
+    return sortedBy { child ->
+        if (child.isFile) {
+            child.length()
+        } else {
+            child.listFiles()?.sumOf { mChild -> mChild.length() } ?: 0
+        }
+    }
 }
 
 fun List<File>.sortedBySizeDESC(): List<File> {
-    return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
-        .thenByDescending { it.listFiles()?.size ?: 0 } // 子项数量排序
-        .thenByDescending { if (it.isDirectory) 0 else it.length() } // 文件大小排序
-        .thenBy { it.name } // 文件名排序
-    )
+    return sortedBySize().reversed()
 }
 
 fun List<File>.sortedByDate(): List<File> {
-    return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
-        .thenByDescending { it.lastModified() } // 日期排序
-        .thenByDescending { if (it.isDirectory) 0 else it.lastModified() } // 日期排序
-        .thenBy { it.name } // 文件名排序
-    )
+    return sortedBy { it.lastModified() }
 }
 
 fun List<File>.sortedByDateDESC(): List<File> {
-    return sortedWith(compareByDescending<File> { it.isDirectory } // 文件夹在前
-        .thenBy { it.lastModified() } // 日期排序
-        .thenBy { if (it.isDirectory) 0 else it.lastModified() } // 日期排序
-        .thenBy { it.name } // 文件名排序
-    )
+    return sortedByDate().reversed()
 }
