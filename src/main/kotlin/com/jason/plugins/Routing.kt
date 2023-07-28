@@ -12,7 +12,6 @@ import com.jason.utils.extension.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
-import io.ktor.server.http.content.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -102,7 +101,7 @@ fun Application.configureRouting() {
                     val file = File(path)
                     val thumbnail = if (isGif) file.createGif(size) else file.createThumbnail(size)
                     if (thumbnail != null) {
-                        call.setContentDisposition(file.name)
+                        call.setContentDisposition(thumbnail.name)
                         call.respondFile(thumbnail)
                     } else {
                         LoggerFactory.getLogger("Encoder").error("thumbnail创建未成功！")
@@ -123,8 +122,6 @@ fun Application.configureRouting() {
                 } else {
                     val file = File(path)
                     if (file.exists()) {
-                        LoggerFactory.getLogger("File").error("文件大小：${LocalFileContent(file).contentLength}")
-
                         call.setContentDisposition(file.name)
                         call.setContentLength(file.length())
                         call.respondFile(file)
@@ -207,15 +204,15 @@ fun Application.configureRouting() {
 
         get("/flashTransfer") {
             val hash = call.parameters["hash"]
-            val childHash = call.parameters["childHash"]
-            val childName = call.parameters["childName"].orEmpty()
+            val fileHash = call.parameters["fileHash"]
+            val fileName = call.parameters["fileName"].orEmpty()
 
             if (hash.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，hash不得为空！"))
                 return@get
             }
 
-            if (childHash.isNullOrBlank()) {
+            if (fileHash.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，childHash不得为空！"))
                 return@get
             }
@@ -231,7 +228,7 @@ fun Application.configureRouting() {
                 return@get
             }
 
-            val filePath = DatabaseFactory.fileHashDao.getPath(childHash).find { File(it).exists() }.orEmpty()
+            val filePath = DatabaseFactory.fileHashDao.getPath(fileHash).find { File(it).exists() }.orEmpty()
             if (filePath.isBlank()) {
                 call.respond(CodeMessageRespondEntity(404, "文件闪传失败，不存在文件索引！"))
                 return@get
@@ -239,7 +236,7 @@ fun Application.configureRouting() {
 
             val originalFile = File(filePath) //已存在的原始文件路径
             if (originalFile.exists()) {
-                val createLink = File(path, childName.ifBlank { originalFile.name })
+                val createLink = File(path, fileName.ifBlank { originalFile.name })
                 if (createLink.exists().not()) {//创建一个符号链接，防止空间占用
                     originalFile.createSymbolicLink(createLink)
                     LoggerFactory.getLogger("Upload").info(
@@ -259,7 +256,7 @@ fun Application.configureRouting() {
 
         post("/upload") {
             val hash = call.parameters["hash"]
-            val childHash = call.parameters["childHash"]
+            val fileHash = call.parameters["fileHash"]
 
             if (hash.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，hash不得为空！"))
@@ -319,12 +316,12 @@ fun Application.configureRouting() {
 
                         LoggerFactory.getLogger("Upload").info("文件复制完毕 >> $file")
 
-                        if (childHash.isNullOrBlank()) {
+                        if (fileHash.isNullOrBlank()) {
                             FileIndexer.addFileIndex(file, Configure.rootDir.absolutePath)
                         } else {
                             FileIndexer.addFileIndex(
                                 file,
-                                childHash,
+                                fileHash,
                                 Configure.rootDir.absolutePath
                             )
                         }

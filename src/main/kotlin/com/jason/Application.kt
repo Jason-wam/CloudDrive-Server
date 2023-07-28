@@ -9,7 +9,7 @@ import com.jason.utils.FileIndexer
 import com.jason.utils.ffmpeg.Encoder
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
-import io.ktor.server.jetty.*
+import io.ktor.server.netty.*
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
@@ -27,7 +27,7 @@ fun main() {
         FileIndexer.indexFiles()
     }
     LoggerFactory.getLogger("Main").info("启动服务器...")
-    embeddedServer(Jetty, port = 8820, host = "0.0.0.0", module = Application::module).start(wait = true)
+    embeddedServer(Netty, port = 8820, host = "0.0.0.0", module = Application::module).start(wait = true)
 }
 
 fun Application.module() {

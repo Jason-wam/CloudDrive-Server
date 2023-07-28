@@ -2,7 +2,6 @@ package com.jason.database.dao
 
 import com.jason.database.DatabaseFactory
 import com.jason.database.table.FileHashTable
-import com.jason.utils.Configure
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
@@ -20,17 +19,24 @@ class FileHashDaoImpl : FileHashDao {
         }.count() > 0
     }
 
-    override suspend fun put(path: String, hash: String, parent: String, type: String, root: String): Boolean =
-        DatabaseFactory.dbQuery {
-            FileHashTable.replace {
-                it[FileHashTable.path] = path
-                it[FileHashTable.hash] = hash
-                it[FileHashTable.root] = root
-                it[FileHashTable.parent] = parent
-                it[FileHashTable.timestamp] = System.currentTimeMillis()
-                it[FileHashTable.type] = type
-            }.insertedCount > 0
-        }
+    override suspend fun put(
+        path: String,
+        hash: String,
+        parent: String,
+        type: String,
+        root: String,
+        date: Long
+    ): Boolean = DatabaseFactory.dbQuery {
+        FileHashTable.replace {
+            it[FileHashTable.path] = path
+            it[FileHashTable.hash] = hash
+            it[FileHashTable.root] = root
+            it[FileHashTable.parent] = parent
+            it[FileHashTable.date] = date
+            it[FileHashTable.timestamp] = System.currentTimeMillis()
+            it[FileHashTable.type] = type
+        }.insertedCount > 0
+    }
 
     override suspend fun getPath(hash: String): List<String> = DatabaseFactory.dbQuery {
         FileHashTable.select {

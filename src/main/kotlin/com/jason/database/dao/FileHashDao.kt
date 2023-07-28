@@ -7,7 +7,7 @@ interface FileHashDao {
 
     suspend fun isExistHash(hash: String): Boolean
 
-    suspend fun put(path: String, hash: String, parent: String, type: String, root: String): Boolean
+    suspend fun put(path: String, hash: String, parent: String, type: String, root: String, date: Long): Boolean
 
     suspend fun getPath(hash: String): List<String>
 
@@ -25,7 +25,7 @@ interface FileHashDao {
 
     suspend fun getHashByParent(path: String): List<String>
 
-    suspend fun getHashMapByParent(path: String): HashMap<String,String>
+    suspend fun getHashMapByParent(path: String): HashMap<String, String>
 
     suspend fun getPathByParent(path: String): List<String>
 

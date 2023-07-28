@@ -7,6 +7,7 @@ object FileHashTable : Table() {
     val root = text("root")
     val parent = text("parent")
     val hash = varchar("hash", 32)
+    val date = long("date")
     val timestamp = long("timestamp")
     val type = text("type")
 

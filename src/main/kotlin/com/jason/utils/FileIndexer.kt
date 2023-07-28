@@ -160,7 +160,8 @@ object FileIndexer {
                             file.absolutePath.toMd5String(),
                             file.parent.orEmpty(),
                             FileType.Media.FOLDER.name,
-                            root
+                            root,
+                            file.lastModified()
                         )
                     } else {
                         DatabaseFactory.fileHashDao.put(
@@ -168,7 +169,8 @@ object FileIndexer {
                             file.createSketchedMD5String(),
                             file.parent.orEmpty(),
                             FileType.getMediaType(file.name).name,
-                            root
+                            root,
+                            file.lastModified()
                         )
                     }
                 }
@@ -183,7 +185,8 @@ object FileIndexer {
             hash,
             file.parent.orEmpty(),
             FileType.getMediaType(file.name).name,
-            root
+            root,
+            file.lastModified()
         )
     }
 }
