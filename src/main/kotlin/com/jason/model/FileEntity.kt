@@ -24,18 +24,18 @@ data class FileEntity(
 )
 
 suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListSort.DATE): List<FileEntity> {
-    val hashMap = DatabaseFactory.fileHashDao.getHashMapByParent(parentPath)
+    val hashMap = DatabaseFactory.fileIndexDao.getHashMapByParent(parentPath)
     return ArrayList<FileEntity>().apply {
         //根据文件夹和文件进行分组
         val group = this@toFileEntities.groupedByIsDirectory()
 
         //先展示文件夹
-        group[true]?.sort(sort).orEmpty().forEach { file ->
+        group[true]?.sort(sort)?.forEach { file ->
             val hash = hashMap[file.absolutePath].orEmpty()
             if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
                 val children = file.children
                 val first: File? = children.findFirstMedia()
-                val firstFileHash = if (first == null) "" else DatabaseFactory.fileHashDao.getHash(first.absolutePath)
+                val firstFileHash = if (first == null) "" else DatabaseFactory.fileIndexDao.getHash(first.absolutePath)
                 val firstFileType = if (first == null) FileType.Media.UNKNOWN else FileType.getMediaType(first.name)
                 add(
                     FileEntity(
@@ -56,8 +56,64 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
         }
 
         //然后展示文件
-        group[false]?.sort(sort).orEmpty().forEach { file ->
+        group[false]?.sort(sort)?.forEach { file ->
             val hash = hashMap[file.absolutePath].orEmpty()
+            if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
+                add(
+                    FileEntity(
+                        name = file.name,
+                        path = file.absolutePath,
+                        hash = hash,
+                        size = file.length(),
+                        date = file.lastModified(),
+                        isFile = file.isFile,
+                        isDirectory = file.isDirectory,
+                        childCount = 0,
+                        firstFileHash = "",
+                        firstFileType = FileType.Media.UNKNOWN,
+                        false
+                    )
+                )
+            }
+        }
+    }
+}
+
+suspend fun Map<File, String>.toFileEntities(sort: ListSort = ListSort.DATE): List<FileEntity> {
+    val map = this
+    return ArrayList<FileEntity>().apply {
+        //根据文件夹和文件进行分组
+        val group = map.groupedByIsDirectory()
+
+        //先展示文件夹
+        group[true]?.sort(sort)?.forEach { file ->
+            val hash = map[file].orEmpty()
+            if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
+                val children = file.children
+                val first: File? = children.findFirstMedia()
+                val firstFileHash = if (first == null) "" else DatabaseFactory.fileIndexDao.getHash(first.absolutePath)
+                val firstFileType = if (first == null) FileType.Media.UNKNOWN else FileType.getMediaType(first.name)
+                add(
+                    FileEntity(
+                        name = file.name,
+                        path = file.absolutePath,
+                        hash = hash,
+                        size = file.length(),
+                        date = file.lastModified(),
+                        isFile = file.isFile,
+                        isDirectory = file.isDirectory,
+                        childCount = children.size,
+                        firstFileHash = firstFileHash,
+                        firstFileType = firstFileType,
+                        false
+                    )
+                )
+            }
+        }
+
+        //然后展示文件[文件已经在查询时排序过，所以不用再次排序]
+        group[false]?.forEach { file ->
+            val hash = map[file].orEmpty()
             if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
                 add(
                     FileEntity(
@@ -101,6 +157,12 @@ fun List<File>.sort(sort: ListSort): List<File> {
     }
 }
 
+fun Map<File, String>.groupedByIsDirectory(): Map<Boolean, List<File>> {
+    return keys.groupBy {
+        it.isDirectory
+    }
+}
+
 fun List<File>.groupedByIsDirectory(): Map<Boolean, List<File>> {
     return groupBy {
         it.isDirectory
@@ -123,6 +185,29 @@ fun List<File>.sortedByName(): List<File> {
 fun List<File>.sortedByNameDESC(): List<File> {
     return sortedByName().reversed()
 }
+
+fun List<File>.sortedBySize(): List<File> {
+    return sortedBy { child ->
+        if (child.isDirectory) {
+            child.listFiles()?.sumOf { mChild -> mChild.length() } ?: 0
+        } else {
+            child.length()
+        }
+    }
+}
+
+fun List<File>.sortedBySizeDESC(): List<File> {
+    return sortedBySize().reversed()
+}
+
+fun List<File>.sortedByDate(): List<File> {
+    return sortedBy { it.lastModified() }
+}
+
+fun List<File>.sortedByDateDESC(): List<File> {
+    return sortedByDate().reversed()
+}
+
 
 fun String.hasNumber(): Boolean {
     return "(\\d+)".toRegex().find(this)?.groupValues?.isNotEmpty() == true
@@ -174,26 +259,4 @@ fun String.findChineseNumber(): Int {
         "仟" -> intNumber += 1000
     }
     return intNumber
-}
-
-fun List<File>.sortedBySize(): List<File> {
-    return sortedBy { child ->
-        if (child.isFile) {
-            child.length()
-        } else {
-            child.listFiles()?.sumOf { mChild -> mChild.length() } ?: 0
-        }
-    }
-}
-
-fun List<File>.sortedBySizeDESC(): List<File> {
-    return sortedBySize().reversed()
-}
-
-fun List<File>.sortedByDate(): List<File> {
-    return sortedBy { it.lastModified() }
-}
-
-fun List<File>.sortedByDateDESC(): List<File> {
-    return sortedByDate().reversed()
 }

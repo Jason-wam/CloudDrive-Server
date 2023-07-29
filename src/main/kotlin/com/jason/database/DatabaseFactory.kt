@@ -1,8 +1,8 @@
 package com.jason.database
 
-import com.jason.database.dao.FileHashDao
-import com.jason.database.dao.FileHashDaoImpl
-import com.jason.database.table.FileHashTable
+import com.jason.database.dao.FileIndexDao
+import com.jason.database.dao.FileIndexDaoImpl
+import com.jason.database.table.FileIndexTable
 import com.jason.utils.Configure
 import com.jason.utils.extension.toMd5String
 import kotlinx.coroutines.Dispatchers
@@ -15,8 +15,8 @@ import java.io.File
 object DatabaseFactory {
     private val databaseDir = File(Configure.userDir, "database").also { it.mkdirs() }
 
-    val fileHashDao: FileHashDao by lazy {
-        FileHashDaoImpl()
+    val fileIndexDao: FileIndexDao by lazy {
+        FileIndexDaoImpl()
     }
 
     fun init() {
@@ -24,7 +24,7 @@ object DatabaseFactory {
         val jdbcURL = "jdbc:sqlite:file:${databaseDir.absolutePath}" + File.separator + "indexes_$hash.db"
         val database = Database.connect(jdbcURL, "org.sqlite.JDBC")
         transaction(database) {
-            SchemaUtils.create(FileHashTable)
+            SchemaUtils.create(FileIndexTable)
         }
     }
 

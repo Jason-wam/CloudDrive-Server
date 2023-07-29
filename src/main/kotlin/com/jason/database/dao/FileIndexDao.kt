@@ -1,13 +1,17 @@
 package com.jason.database.dao
 
+import com.jason.utils.ListSort
 import org.jetbrains.exposed.sql.Query
+import java.io.File
 
-interface FileHashDao {
+interface FileIndexDao {
+    suspend fun put(file: File, hash: String, type: String)
+
     suspend fun isExist(path: String): Boolean
 
     suspend fun isExistHash(hash: String): Boolean
 
-    suspend fun put(path: String, hash: String, parent: String, type: String, root: String, date: Long): Boolean
+    suspend fun search(kw: String, page: Int, size: Int, sort: ListSort): HashMap<File, String>
 
     suspend fun getPath(hash: String): List<String>
 
