@@ -4,6 +4,7 @@ import com.jason.database.DatabaseFactory
 import com.jason.utils.FileType
 import com.jason.utils.ListSort
 import com.jason.utils.extension.children
+import com.jason.utils.extension.isSymlink
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.text.Collator
@@ -49,7 +50,7 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
                         childCount = children.size,
                         firstFileHash = firstFileHash,
                         firstFileType = firstFileType,
-                        false
+                        file.isSymlink()
                     )
                 )
             }
@@ -71,7 +72,7 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
                         childCount = 0,
                         firstFileHash = "",
                         firstFileType = FileType.Media.UNKNOWN,
-                        false
+                        file.isSymlink()
                     )
                 )
             }

@@ -32,7 +32,6 @@ object FileIndexer {
      * 重新扫描指定目录以更新文件列表索引
      */
     suspend fun indexDirectory(file: File) {
-        val rootDir = Configure.rootDir.absolutePath
         if (file.isDirectory) {
             addFileIndex(file)
 
@@ -67,7 +66,7 @@ object FileIndexer {
             }?.forEach {
                 //遍历不存在的文件重新添加文件索引
                 addFileIndex(it)
-                LoggerFactory.getLogger(name).info("添加文件索引: ${it.absolutePath}！")
+                LoggerFactory.getLogger(name).info("添加文件索引: ${it.absolutePath}")
             }
         }
     }
@@ -81,7 +80,7 @@ object FileIndexer {
                 val exist = Files.exists(path)
                 if (!exist) {
                     it.delete()
-                    LoggerFactory.getLogger(name).info("清理不存在的符号链接: $it ..")
+                    LoggerFactory.getLogger(name).info("清理不存在的符号链接: $it")
                 }
             }
         }
