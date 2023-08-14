@@ -9,7 +9,6 @@ object FileIndexTable : Table() {
     val size = long("size")
     val date = long("date")
     val type = text("type")
-    val root = text("root")
     val parent = text("parent")
 
     val isFile = bool("isFile")

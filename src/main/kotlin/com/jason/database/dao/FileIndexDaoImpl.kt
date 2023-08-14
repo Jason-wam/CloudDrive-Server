@@ -2,12 +2,12 @@ package com.jason.database.dao
 
 import com.jason.database.DatabaseFactory
 import com.jason.database.table.FileIndexTable
-import com.jason.utils.Configure
+import com.jason.model.DuplicationFileEntity
+import com.jason.utils.FileType
 import com.jason.utils.ListSort
 import com.jason.utils.ListSort.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import java.io.File
 
 class FileIndexDaoImpl : FileIndexDao {
@@ -21,7 +21,6 @@ class FileIndexDaoImpl : FileIndexDao {
             it[FileIndexTable.date] = file.lastModified()
             it[FileIndexTable.type] = type
 
-            it[FileIndexTable.root] = Configure.rootDir.absolutePath
             it[FileIndexTable.parent] = file.parent.orEmpty()
 
             it[FileIndexTable.isFile] = file.isFile
@@ -46,11 +45,11 @@ class FileIndexDaoImpl : FileIndexDao {
     override suspend fun search(kw: String, page: Int, size: Int, sort: ListSort): HashMap<File, String> =
         DatabaseFactory.dbQuery {
             val start = (page - 1) * size
-            val query = FileIndexTable.select { FileIndexTable.name like "%$kw%" }
-            query.limit(size, start.toLong())
-            query.orderBy(FileIndexTable.isDirectory, SortOrder.DESC)
+            var query = FileIndexTable.select { FileIndexTable.name like "%$kw%" }
+            query = query.limit(size, start.toLong())
+            query = query.orderBy(FileIndexTable.isDirectory, SortOrder.DESC)
 
-            when (sort) {
+            query = when (sort) {
                 NAME -> query.orderBy(FileIndexTable.name)
                 SIZE -> query.orderBy(FileIndexTable.size)
                 DATE -> query.orderBy(FileIndexTable.date)
@@ -65,6 +64,53 @@ class FileIndexDaoImpl : FileIndexDao {
                 }
             }
         }
+
+    override suspend fun searchType(
+        type: String,
+        page: Int,
+        size: Int,
+        sort: ListSort
+    ): HashMap<File, String> = DatabaseFactory.dbQuery {
+        val start = (page - 1) * size
+        var query = if (type != FileType.Media.DOCUMENTS.name) {
+            FileIndexTable.select { FileIndexTable.type eq type }
+        } else {
+            FileIndexTable.select {
+                (FileIndexTable.type eq FileType.Media.TEXT.name) or
+                        (FileIndexTable.type eq FileType.Media.EXCEL.name) or
+                        (FileIndexTable.type eq FileType.Media.WORD.name) or
+                        (FileIndexTable.type eq FileType.Media.PPT.name)
+            }
+        }
+
+        query = when (sort) {
+            NAME -> query.orderBy(FileIndexTable.name)
+            SIZE -> query.orderBy(FileIndexTable.size)
+            DATE -> query.orderBy(FileIndexTable.date)
+            NAME_DESC -> query.orderBy(FileIndexTable.name, SortOrder.DESC)
+            SIZE_DESC -> query.orderBy(FileIndexTable.size, SortOrder.DESC)
+            DATE_DESC -> query.orderBy(FileIndexTable.date, SortOrder.DESC)
+        }
+
+        query = query.orderBy(FileIndexTable.isDirectory, SortOrder.DESC)
+        query = query.limit(size, start.toLong())
+        HashMap<File, String>().apply {
+            query.map {
+                this[File(it[FileIndexTable.path])] = it[FileIndexTable.hash]
+            }
+        }
+    }
+
+    override suspend fun recentFiles(size: Int): HashMap<File, String> = DatabaseFactory.dbQuery {
+        HashMap<File, String>().apply {
+            FileIndexTable.select { FileIndexTable.type neq FileType.Media.FOLDER.name }
+                .orderBy(FileIndexTable.date, SortOrder.DESC)
+                .limit(size)
+                .map {
+                    this[File(it[FileIndexTable.path])] = it[FileIndexTable.hash]
+                }
+        }
+    }
 
     override suspend fun getPath(hash: String): List<String> = DatabaseFactory.dbQuery {
         FileIndexTable.select {
@@ -90,18 +136,6 @@ class FileIndexDaoImpl : FileIndexDao {
         FileIndexTable.deleteWhere {
             FileIndexTable.path eq path
         } > 0
-    }
-
-    override suspend fun deleteByRoot(path: String): Int = DatabaseFactory.dbQuery {
-        FileIndexTable.deleteWhere {
-            FileIndexTable.root eq path
-        }
-    }
-
-    override suspend fun deleteByNotRoot(path: String): Int = DatabaseFactory.dbQuery {
-        FileIndexTable.deleteWhere {
-            FileIndexTable.root neq path
-        }
     }
 
     override suspend fun deleteByParent(path: String): Int = DatabaseFactory.dbQuery {
@@ -147,5 +181,28 @@ class FileIndexDaoImpl : FileIndexDao {
 
     override suspend fun queryAll(): Query = DatabaseFactory.dbQuery {
         FileIndexTable.selectAll()
+    }
+
+    override suspend fun findDuplications(): List<DuplicationFileEntity> = DatabaseFactory.dbQuery {
+        val list = ArrayList<DuplicationFileEntity>()
+        FileIndexTable.selectAll().map {
+            DuplicationFileEntity(
+                name = it[FileIndexTable.name],
+                path = it[FileIndexTable.path],
+                hash = it[FileIndexTable.hash],
+                size = it[FileIndexTable.size],
+                date = it[FileIndexTable.date],
+                type = FileType.getMediaType(it[FileIndexTable.name])
+            )
+        }.groupBy {
+            it.hash
+        }.filter {
+            it.value.size > 1
+        }.map {
+            it.value
+        }.forEach {
+            list.addAll(it)
+        }
+        list
     }
 }

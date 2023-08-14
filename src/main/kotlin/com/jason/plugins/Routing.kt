@@ -21,31 +21,57 @@ import java.io.File
 fun Application.configureRouting() {
     routing {
         get("/") {
-            call.respondText("Hello World!")
+            call.respondText("Wink")
         }
 
-        get("/storage") {
-            val usedStorage = Configure.rootDir.totalSpace - Configure.rootDir.freeSpace
-            val totalStorage = Configure.rootDir.totalSpace
-            val selfUsedStorage = DatabaseFactory.dbQuery {
-                DatabaseFactory.fileIndexDao.queryAll().filter {
-                    !it[FileIndexTable.isDirectory]
-                }.sumOf {
-                    it[FileIndexTable.size]
+        get("/homePage") {
+            val recentSize = (call.parameters["recentSize"] ?: "10").toInt()
+            val showHidden = (call.parameters["showHidden"] ?: "false").toBoolean()
+
+            LoggerFactory.getLogger("HomePage").info(
+                "recentSize = $recentSize, showHidden = $showHidden"
+            )
+
+            val mountedDirs = ArrayList<MountedDirEntity>().apply {
+                Configure.mountedDirs.forEach { dir ->
+                    val usedStorage = dir.totalSpace - dir.freeSpace
+                    val totalStorage = dir.totalSpace
+                    val selfUsedStorage = DatabaseFactory.dbQuery {
+                        DatabaseFactory.fileIndexDao.queryAll().filter {
+                            !it[FileIndexTable.isDirectory]
+                        }.sumOf {
+                            it[FileIndexTable.size]
+                        }
+                    }
+                    add(
+                        MountedDirEntity(
+                            dir.absolutePath.toMd5String(),
+                            dir.absolutePath,
+                            usedStorage,
+                            totalStorage,
+                            selfUsedStorage,
+                            usedStorage.toFileSizeString(),
+                            totalStorage.toFileSizeString(),
+                            selfUsedStorage.toFileSizeString()
+                        )
+                    )
                 }
             }
 
             call.respond(
-                StorageUsageEntity(
-                    200,
-                    usedStorage,
-                    totalStorage,
-                    usedStorage.toFileSizeString(),
-                    totalStorage.toFileSizeString(),
-                    selfUsedStorage,
-                    selfUsedStorage.toFileSizeString()
+                HomePageRespondEntity(
+                    mountedDirs,
+                    DatabaseFactory.fileIndexDao.recentFiles(recentSize).filter {
+                        it.key.exists()
+                    }.filter {
+                        if (showHidden) true else it.key.isHidden.not()
+                    }.toFileEntities(ListSort.DATE_DESC)
                 )
             )
+        }
+
+        get("/duplication") {
+            call.respond(DuplicationRespondEntity(DatabaseFactory.fileIndexDao.findDuplications()))
         }
 
         get("/index") {
@@ -64,50 +90,40 @@ fun Application.configureRouting() {
         }
 
         get("/list") {
-            val hash = call.parameters["hash"]
+            val showHidden = (call.parameters["showHidden"] ?: "false").toBoolean()
             val sort = call.parameters["sort"].let {
-                ListSort.valueOf(it ?: ListSort.DATE.name)
+                ListSort.valueOf(it ?: ListSort.DATE_DESC.name)
             }
 
-            val showHidden = (call.parameters["showHidden"] ?: "true").toBoolean()
+            val hash = call.parameters["hash"]
+            if (hash.isNullOrBlank()) {
+                call.respond(CodeMessageRespondEntity(404, "目标目录Hash不得为空！"))
+                return@get
+            }
 
             LoggerFactory.getLogger("List").info("list: hash = $hash,sort = $sort,showHidden = $showHidden")
 
-            if (hash.isNullOrBlank() || hash == "%root") {
-                FileIndexer.indexDirectory(Configure.rootDir)
+            val path = DatabaseFactory.fileIndexDao.getPath(hash).find { File(it).exists() }.orEmpty()
+            if (path.isBlank()) {
+                call.respond(CodeMessageRespondEntity(404, "NotFound，未查询到目录索引！"))
+                return@get
+            }
+
+            val file = File(path)
+            if (file.exists().not()) {
+                call.respond(CodeMessageRespondEntity(404, "NotFound，文件路径不存在！"))
+            } else {
+                FileIndexer.indexDirectory(file)
                 call.respond(
                     FileListRespondEntity(
-                        DatabaseFactory.fileIndexDao.getHash(Configure.rootDir.absolutePath),
-                        Configure.rootDir.absolutePath,
-                        Configure.rootDir.absolutePath,
-                        Configure.rootDir.children.filter { if (showHidden) true else it.isHidden.not() }
-                            .toFileEntities(Configure.rootDir.absolutePath, sort),
-                        Configure.rootDir.toNavigation()
+                        hash,
+                        file.name,
+                        file.absolutePath,
+                        file.children.filter { if (showHidden) true else it.isHidden.not() }
+                            .toFileEntities(file.absolutePath, sort),
+                        file.toNavigation()
                     )
                 )
-            } else {
-                val path = DatabaseFactory.fileIndexDao.getPath(hash).find { File(it).exists() }.orEmpty()
-                if (path.isBlank()) {
-                    call.respond(CodeMessageRespondEntity(404, "NotFound，未查询到目录索引！"))
-                    return@get
-                }
-
-                val file = File(path)
-                if (file.exists().not()) {
-                    call.respond(CodeMessageRespondEntity(404, "NotFound，文件路径不存在！"))
-                } else {
-                    FileIndexer.indexDirectory(file)
-                    call.respond(
-                        FileListRespondEntity(
-                            hash,
-                            file.name,
-                            file.absolutePath,
-                            file.children.filter { if (showHidden) true else it.isHidden.not() }
-                                .toFileEntities(file.absolutePath, sort),
-                            file.toNavigation()
-                        )
-                    )
-                }
             }
         }
 
@@ -115,9 +131,9 @@ fun Application.configureRouting() {
             val kw = call.parameters["kw"].orEmpty()
             val page = (call.parameters["page"] ?: "1").toInt()
             val size = (call.parameters["size"] ?: "100").toInt()
-            val showHidden = (call.parameters["showHidden"] ?: "true").toBoolean()
+            val showHidden = (call.parameters["showHidden"] ?: "false").toBoolean()
             val sort = call.parameters["sort"].let {
-                ListSort.valueOf(it ?: ListSort.DATE.name)
+                ListSort.valueOf(it ?: ListSort.DATE_DESC.name)
             }
 
             if (kw.isBlank()) {
@@ -129,12 +145,7 @@ fun Application.configureRouting() {
                 "kw: $kw, page = $page, size = $size, showHidden = $showHidden"
             )
 
-            val files = DatabaseFactory.fileIndexDao.search(kw, page, size, sort).filter {
-                it.key.exists()
-            }.filter {
-                if (showHidden) true else it.key.isHidden.not()
-            }
-
+            val files = DatabaseFactory.fileIndexDao.search(kw, page, size, sort)
             if (files.isEmpty()) {
                 call.respond(CodeMessageRespondEntity(404, "没有搜索到相关结果！"))
             } else {
@@ -143,7 +154,48 @@ fun Application.configureRouting() {
                         page,
                         files.size,
                         files.size == size,
-                        files.toFileEntities(sort)
+                        files.filter {
+                            it.key.exists()
+                        }.filter {
+                            if (showHidden) true else it.key.isHidden.not()
+                        }.toFileEntities(sort)
+                    )
+                )
+            }
+        }
+
+        get("/searchType") {
+            val type = call.parameters["type"]?.let { FileType.Media.valueOf(it) }
+            val page = (call.parameters["page"] ?: "1").toInt()
+            val size = (call.parameters["size"] ?: "100").toInt()
+            val showHidden = (call.parameters["showHidden"] ?: "false").toBoolean()
+            val sort = call.parameters["sort"].let {
+                ListSort.valueOf(it ?: ListSort.DATE.name)
+            }
+
+            if (type == null) {
+                call.respond(HttpStatusCode.BadRequest, "BadRequest，文件类型不得为空！")
+                return@get
+            }
+
+            LoggerFactory.getLogger("SearchType").info(
+                "type: $type, page = $page, size = $size, showHidden = $showHidden"
+            )
+
+            val files = DatabaseFactory.fileIndexDao.searchType(type.name, page, size, sort)
+            if (files.isEmpty()) {
+                call.respond(CodeMessageRespondEntity(404, "没有查找到相关结果！"))
+            } else {
+                call.respond(
+                    SearchRespondEntity(
+                        page,
+                        files.size,
+                        files.size == size,
+                        files.filter {
+                            it.key.exists()
+                        }.filter {
+                            if (showHidden) true else it.key.isHidden.not()
+                        }.toFileEntities(ListSort.DATE_DESC)
                     )
                 )
             }
@@ -211,13 +263,8 @@ fun Application.configureRouting() {
                 return@get
             }
 
-            val path = if (hash == "%root") {
-                Configure.rootDir.absolutePath
-            } else {
-                DatabaseFactory.fileIndexDao.getPath(hash).find { File(it).exists() }.orEmpty()
-            }
-
-            if (path.isBlank()) {
+            val path = DatabaseFactory.fileIndexDao.getPath(hash).firstOrNull()
+            if (path == null) {
                 call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定文件路径！"))
                 return@get
             }
@@ -364,12 +411,7 @@ fun Application.configureRouting() {
                 return@post
             }
 
-            val path = if (hash == "%root") {
-                Configure.rootDir.absolutePath
-            } else {
-                DatabaseFactory.fileIndexDao.getPath(hash).find { File(it).exists() }.orEmpty()
-            }
-
+            val path = DatabaseFactory.fileIndexDao.getPath(hash).firstOrNull().orEmpty()
             if (path.isBlank() || File(path).exists().not()) {
                 LoggerFactory.getLogger("Upload").info("未查询到上传目录：$hash")
                 call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定文件路径！"))
@@ -422,6 +464,7 @@ fun Application.configureRouting() {
         get("/flashBackup") {
             val fileName = call.parameters["fileName"]
             val fileHash = call.parameters["fileHash"]
+            val folderHash = call.parameters["folderHash"]
             val deviceName = call.parameters["deviceName"]
 
             if (fileName.isNullOrBlank()) {
@@ -434,22 +477,48 @@ fun Application.configureRouting() {
                 return@get
             }
 
+            if (folderHash.isNullOrBlank()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，folderHash不得为空！"))
+                return@get
+            }
+
             if (deviceName.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，deviceName不得为空！"))
                 return@get
             }
 
-            val folder = File(Configure.rootDir, "文件备份目录").also { it.mkdirs() }
-            val folderDevice = File(folder, "来自${deviceName}的文件").also { it.mkdirs() }
+            val folder = DatabaseFactory.fileIndexDao.getPath(folderHash).first()
+            if (folder.isBlank() || File(folder).exists().not()) {
+                call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定目标目录！"))
+                return@get
+            }
+
+            val targetFolder = File(folder, "文件备份目录")
+            if (targetFolder.exists().not()) {
+                targetFolder.mkdirs()
+                FileIndexer.addFileIndex(targetFolder, targetFolder.absolutePath.toMd5String())
+            }
+
+            val folderDevice = File(targetFolder, "来自${deviceName}的文件")
+            if (folderDevice.exists().not()) {
+                folderDevice.mkdirs()
+                FileIndexer.addFileIndex(folderDevice, folderDevice.absolutePath.toMd5String())
+            }
+
             val childFolder = if (FileType.isImage(fileName)) {
-                File(folderDevice, "图片").also { it.mkdirs() }
+                File(folderDevice, "图片")
             } else if (FileType.isVideo(fileName)) {
-                File(folderDevice, "视频").also { it.mkdirs() }
+                File(folderDevice, "视频")
             } else if (FileType.isAudio(fileName)) {
-                File(folderDevice, "音频").also { it.mkdirs() }
+                File(folderDevice, "音频")
             } else {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，不支持的文件类型！"))
                 return@get
+            }
+
+            if (childFolder.exists().not()) {
+                childFolder.mkdirs()
+                FileIndexer.addFileIndex(childFolder, childFolder.absolutePath.toMd5String())
             }
 
             val path = DatabaseFactory.fileIndexDao.getPath(fileHash).find { File(it).exists() }.orEmpty()
@@ -463,11 +532,11 @@ fun Application.configureRouting() {
             if (createLink.exists().not() && originalFile.createSymbolicLink(createLink)?.exists() == true) {
                 //创建一个符号链接，防止空间占用
                 FileIndexer.addFileIndex(createLink, fileHash)
-                LoggerFactory.getLogger("Upload").info(
+                LoggerFactory.getLogger("Backup").info(
                     "文件闪传完毕: ${originalFile.absolutePath} linked >> ${createLink.absolutePath}"
                 )
             } else {
-                LoggerFactory.getLogger("Upload").info(
+                LoggerFactory.getLogger("Backup").info(
                     "文件已经存在: ${originalFile.absolutePath} linked >> ${createLink.absolutePath}"
                 )
             }
@@ -477,6 +546,7 @@ fun Application.configureRouting() {
         post("/backup") {
             val fileName = call.parameters["fileName"]
             val fileHash = call.parameters["fileHash"]
+            val folderHash = call.parameters["folderHash"]
             val deviceName = call.parameters["deviceName"]
 
             if (fileName.isNullOrBlank()) {
@@ -492,24 +562,51 @@ fun Application.configureRouting() {
                 return@post
             }
 
-            val folder = File(Configure.rootDir, "文件备份目录").also { it.mkdirs() }
-            val folderDevice = File(folder, "来自${deviceName}的文件").also { it.mkdirs() }
+            if (folderHash.isNullOrBlank()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，folderHash不得为空！"))
+                return@post
+            }
+
+            val folder = DatabaseFactory.fileIndexDao.getPath(folderHash).first()
+            if (folder.isBlank() || File(folder).exists().not()) {
+                call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定目标目录！"))
+                return@post
+            }
+
+            val targetFolder = File(folder, "文件备份目录")
+            if (targetFolder.exists().not()) {
+                targetFolder.mkdirs()
+                FileIndexer.addFileIndex(targetFolder, targetFolder.absolutePath.toMd5String())
+            }
+
+            val folderDevice = File(targetFolder, "来自${deviceName}的文件")
+
+            if (folderDevice.exists().not()) {
+                folderDevice.mkdirs()
+                FileIndexer.addFileIndex(folderDevice, folderDevice.absolutePath.toMd5String())
+            }
+
             val childFolder = if (FileType.isImage(fileName)) {
-                File(folderDevice, "图片").also { it.mkdirs() }
+                File(folderDevice, "图片")
             } else if (FileType.isVideo(fileName)) {
-                File(folderDevice, "视频").also { it.mkdirs() }
+                File(folderDevice, "视频")
             } else if (FileType.isAudio(fileName)) {
-                File(folderDevice, "音频").also { it.mkdirs() }
+                File(folderDevice, "音频")
             } else {
                 call.respond(CodeMessageRespondEntity(403, "BadRequest，不支持的文件类型！"))
                 return@post
             }
 
-            LoggerFactory.getLogger("Upload").info("正在接收 $fileName 到缓存...")
+            if (childFolder.exists().not()) {
+                childFolder.mkdirs()
+                FileIndexer.addFileIndex(childFolder, childFolder.absolutePath.toMd5String())
+            }
+
+            LoggerFactory.getLogger("Backup").info("正在接收 $fileName 到缓存...")
             call.receiveMultipart().forEachPart { part ->
                 if (part is PartData.FileItem) {
                     try {
-                        LoggerFactory.getLogger("Upload").info(
+                        LoggerFactory.getLogger("Backup").info(
                             "正在复制文件：$fileName 到 >> ${childFolder.absolutePath}"
                         )
 
@@ -520,14 +617,12 @@ fun Application.configureRouting() {
                                 input.copyTo(output)
                             }
 
-                            LoggerFactory.getLogger("Upload").info("文件复制完毕:{}", file.absolutePath)
+                            LoggerFactory.getLogger("Backup").info("文件复制完毕:{}", file.absolutePath)
 
                             if (fileHash.isBlank()) {
                                 FileIndexer.addFileIndex(file)
                             } else {
-                                FileIndexer.addFileIndex(
-                                    file, fileHash
-                                )
+                                FileIndexer.addFileIndex(file, fileHash)
                             }
                         }
                     } catch (e: Exception) {

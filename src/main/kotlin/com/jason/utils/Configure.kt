@@ -1,33 +1,35 @@
 package com.jason.utils
 
+import org.json.JSONObject
 import java.io.File
-import java.util.*
 
 object Configure {
-    val tmpDir: File = File(System.getProperty("java.io.tmpdir"))
-    val userDir: File = File(System.getProperty("user.dir"))
+    private val tmpDir: File = File(System.getProperty("java.io.tmpdir"))
+    val userDir = System.getProperty("user.dir")
     val cacheDir: File = File(tmpDir, "VirtualDrive").also { it.mkdirs() }
     var thumbDir: File = File(cacheDir, "thumbnail").also { it.mkdirs() }
-    val properties by lazy {
-        Properties().apply {
-            val configure = File(userDir, "configure.xml")
-            if (configure.exists()) {
-                configure.inputStream().use {
-                    loadFromXML(it)
-                }
-            } else {
-                setProperty("ffmpeg", "%ffmpeg/bin/ffmpeg")
-                setProperty("ffprobe", "%ffmpeg/bin/ffprobe")
-                setProperty("rootDir", "%VirtualDrive")
-                storeToXML(configure.outputStream(), "虚拟云盘配置文件")
-            }
+    private val obj: JSONObject
+
+    init {
+        val configure = File(userDir, "configure.json")
+        if (configure.exists()) {
+            obj = JSONObject(configure.readText())
+        } else {
+            obj = JSONObject()
+            obj.put("ffmpeg", "ffmpeg")
+            obj.put("ffProbe", "ffprobe")
+            obj.put("rootDir", "./VirtualDrive")
+            obj.put("countDirSize", false)
+            obj.put("mountedDirs", listOf("./VirtualDrive"))
+            configure.createNewFile()
+            configure.writeText(obj.toString(2))
         }
     }
 
     val ffmpeg: String by lazy {
-        properties.getProperty("ffmpeg", "%ffmpeg/bin/ffmpeg").let {
-            if (it.startsWith("%")) {
-                File(userDir, it.removePrefix("%")).absolutePath
+        obj.optString("ffmpeg", "ffmpeg").let {
+            if (it.startsWith("./")) {
+                File(userDir, it.removePrefix("./")).absolutePath
             } else {
                 it
             }
@@ -35,9 +37,9 @@ object Configure {
     }
 
     val ffProbe: String by lazy {
-        properties.getProperty("ffprobe", "%ffmpeg/bin/ffprobe").let {
-            if (it.startsWith("%")) {
-                File(userDir, it.removePrefix("%")).absolutePath
+        obj.optString("ffProbe", "ffprobe").let {
+            if (it.startsWith("./")) {
+                File(userDir, it.removePrefix("./")).absolutePath
             } else {
                 it
             }
@@ -45,12 +47,31 @@ object Configure {
     }
 
     val rootDir: File by lazy {
-        properties.getProperty("rootDir", "%VirtualDrive").let {
-            if (it.startsWith("%")) {
-                File(userDir, it.removePrefix("%"))
+        obj.optString("rootDir", "./VirtualDrive").let {
+            if (it.startsWith("./")) {
+                File(userDir, it.removePrefix("./"))
             } else {
                 File(it)
             }
         }
+    }
+
+    val mountedDirs: List<File> by lazy {
+        ArrayList<File>().apply {
+            obj.optJSONArray("mountedDirs")?.let { array ->
+                for (i in 0 until array.length()) {
+                    val dir = array.getString(i)
+                    if (dir.startsWith("./")) {
+                        add(File(userDir, dir.removePrefix("./")))
+                    } else {
+                        add(File(dir))
+                    }
+                }
+            }
+        }
+    }
+
+    val countDirSize: Boolean by lazy {
+        obj.optBoolean("countDirSize", false)
     }
 }

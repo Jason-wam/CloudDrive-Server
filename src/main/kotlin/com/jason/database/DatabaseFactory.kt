@@ -4,7 +4,6 @@ import com.jason.database.dao.FileIndexDao
 import com.jason.database.dao.FileIndexDaoImpl
 import com.jason.database.table.FileIndexTable
 import com.jason.utils.Configure
-import com.jason.utils.extension.toMd5String
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -20,8 +19,7 @@ object DatabaseFactory {
     }
 
     fun init() {
-        val hash = Configure.rootDir.absolutePath.toMd5String()
-        val jdbcURL = "jdbc:sqlite:file:${databaseDir.absolutePath}" + File.separator + "indexes_$hash.db"
+        val jdbcURL = "jdbc:sqlite:file:${databaseDir.absolutePath}" + File.separator + "indexes.db"
         val database = Database.connect(jdbcURL, "org.sqlite.JDBC")
         transaction(database) {
             SchemaUtils.create(FileIndexTable)

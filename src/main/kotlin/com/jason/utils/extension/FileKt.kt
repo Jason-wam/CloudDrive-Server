@@ -20,6 +20,11 @@ inline val File.children: List<File>
         return listFiles()?.toList().orEmpty()
     }
 
+inline val File.size: Long
+    get() {
+        return if (this.isFile) return length() else allChildren().sumOf { it.length() }
+    }
+
 /**
  * 递归枚举目录下全部文件
  */
@@ -35,6 +40,7 @@ fun File.allChildren(): List<File> {
         }
     }
 }
+
 
 /**
  * 校验整个文件的MD5
@@ -65,13 +71,13 @@ fun InputStream.createMD5String(block: ((bytesRead: Long) -> Unit)? = null): Str
 /**
  * 因为大文件校验过慢，所以可以选择读取文件开头和结尾
  */
-fun File.createSketchedMD5String(blockSize: Long = 2.MB): String {
+fun File.createSketchedMD5String(blockSize: Long = 200.KB): String {
     return inputStream().use {
         it.createSketchedMD5String(length(), blockSize)
     }
 }
 
-fun InputStream.createSketchedMD5String(fileLength: Long, blockSize: Long = 2.MB): String {
+fun InputStream.createSketchedMD5String(fileLength: Long, blockSize: Long = 200.KB): String {
     if (blockSize >= fileLength) return createMD5String()
     val messageDigest = MessageDigest.getInstance("MD5")
     var readPoint = readBlock(blockSize) { buffer ->
@@ -165,8 +171,8 @@ fun File.isSymlink(): Boolean {
     return Files.isSymbolicLink(toPath())
 }
 
-fun File.toNavigation(): ArrayList<FileNavigationEntity> {
-    val rootDir = Configure.rootDir
+fun File.toNavigation(): List<FileNavigationEntity> {
+    val rootDir = Configure.mountedDirs.find { absolutePath.startsWith(it.absolutePath) } ?: return emptyList()
     fun File.listNavigation2(): ArrayList<FileNavigationEntity> {
         return ArrayList<FileNavigationEntity>().apply {
             this@listNavigation2.parentFile?.let {

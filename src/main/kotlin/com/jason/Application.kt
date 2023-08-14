@@ -26,6 +26,7 @@ fun main() {
     runBlocking {
         FileIndexer.indexFiles()
     }
+
     LoggerFactory.getLogger("Main").info("启动服务器...")
     embeddedServer(Netty, port = 8820, host = "0.0.0.0", module = Application::module).start(wait = true)
 }

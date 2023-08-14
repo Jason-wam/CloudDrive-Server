@@ -1,5 +1,6 @@
 package com.jason.database.dao
 
+import com.jason.model.DuplicationFileEntity
 import com.jason.utils.ListSort
 import org.jetbrains.exposed.sql.Query
 import java.io.File
@@ -13,6 +14,10 @@ interface FileIndexDao {
 
     suspend fun search(kw: String, page: Int, size: Int, sort: ListSort): HashMap<File, String>
 
+    suspend fun searchType(type: String, page: Int, size: Int, sort: ListSort): HashMap<File, String>
+
+    suspend fun recentFiles(size: Int): HashMap<File, String>
+
     suspend fun getPath(hash: String): List<String>
 
     suspend fun getPath(hash: String, parent: String): String
@@ -20,10 +25,6 @@ interface FileIndexDao {
     suspend fun getHash(path: String): String
 
     suspend fun delete(path: String): Boolean
-
-    suspend fun deleteByRoot(path: String): Int
-
-    suspend fun deleteByNotRoot(path: String): Int
 
     suspend fun deleteByParent(path: String): Int
 
@@ -38,4 +39,6 @@ interface FileIndexDao {
     suspend fun count(): Long
 
     suspend fun queryAll(): Query
+
+    suspend fun findDuplications(): List<DuplicationFileEntity>
 }

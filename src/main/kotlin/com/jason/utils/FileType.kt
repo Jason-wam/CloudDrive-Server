@@ -62,7 +62,7 @@ object FileType {
 
     enum class Media {
         VIDEO, IMAGE, AUDIO, COMPRESS, PPT, TEXT, WORD, EXCEL, APPLICATION, DATABASE, TORRENT, EXE, WEB,
-        FONT, FOLDER, UNKNOWN
+        FONT, FOLDER, DOCUMENTS, UNKNOWN
     }
 
     fun getMediaType(fileName: String): Media {

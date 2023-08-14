@@ -1,10 +1,13 @@
 package com.jason.model
 
 import com.jason.database.DatabaseFactory
+import com.jason.utils.Configure
 import com.jason.utils.FileType
 import com.jason.utils.ListSort
 import com.jason.utils.extension.children
 import com.jason.utils.extension.isSymlink
+import com.jason.utils.extension.size
+import com.jason.utils.extension.toMd5String
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.text.Collator
@@ -14,6 +17,7 @@ data class FileEntity(
     val name: String,
     val path: String,
     val hash: String,
+    val parentHash: String,
     val size: Long,
     val date: Long,
     val isFile: Boolean,
@@ -24,7 +28,7 @@ data class FileEntity(
     val isVirtual: Boolean
 )
 
-suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListSort.DATE): List<FileEntity> {
+suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort? = null): List<FileEntity> {
     val hashMap = DatabaseFactory.fileIndexDao.getHashMapByParent(parentPath)
     return ArrayList<FileEntity>().apply {
         //根据文件夹和文件进行分组
@@ -43,7 +47,8 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
                         name = file.name,
                         path = file.absolutePath,
                         hash = hash,
-                        size = file.length(),
+                        parentHash = parentPath.toMd5String(),
+                        size = if (Configure.countDirSize) file.size else 0,
                         date = file.lastModified(),
                         isFile = file.isFile,
                         isDirectory = file.isDirectory,
@@ -65,6 +70,7 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
                         name = file.name,
                         path = file.absolutePath,
                         hash = hash,
+                        parentHash = parentPath.toMd5String(),
                         size = file.length(),
                         date = file.lastModified(),
                         isFile = file.isFile,
@@ -80,7 +86,55 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort = ListS
     }
 }
 
-suspend fun Map<File, String>.toFileEntities(sort: ListSort = ListSort.DATE): List<FileEntity> {
+
+suspend fun Map<File, String>.toFileEntitiesNoneSort(): List<FileEntity> {
+    return ArrayList<FileEntity>().apply {
+        this@toFileEntitiesNoneSort.forEach {
+            val file = it.key
+            if (file.isDirectory) {
+                val children = file.children
+                val first: File? = children.findFirstMedia()
+                val firstFileHash = if (first == null) "" else DatabaseFactory.fileIndexDao.getHash(first.absolutePath)
+                val firstFileType = if (first == null) FileType.Media.UNKNOWN else FileType.getMediaType(first.name)
+                add(
+                    FileEntity(
+                        name = file.name,
+                        path = file.absolutePath,
+                        hash = it.value,
+                        parentHash = file.parentFile.absolutePath.toMd5String(),
+                        size = if (Configure.countDirSize) file.size else 0,
+                        date = file.lastModified(),
+                        isFile = false,
+                        isDirectory = true,
+                        childCount = children.size,
+                        firstFileHash = firstFileHash,
+                        firstFileType = firstFileType,
+                        file.isSymlink()
+                    )
+                )
+            } else {
+                add(
+                    FileEntity(
+                        name = file.name,
+                        path = file.absolutePath,
+                        hash = it.value,
+                        parentHash = file.parentFile.absolutePath.toMd5String(),
+                        size = file.length(),
+                        date = file.lastModified(),
+                        isFile = true,
+                        isDirectory = false,
+                        childCount = 0,
+                        firstFileHash = "",
+                        firstFileType = FileType.Media.UNKNOWN,
+                        file.isSymlink()
+                    )
+                )
+            }
+        }
+    }
+}
+
+suspend fun Map<File, String>.toFileEntities(sort: ListSort? = null): List<FileEntity> {
     val map = this
     return ArrayList<FileEntity>().apply {
         //根据文件夹和文件进行分组
@@ -99,21 +153,22 @@ suspend fun Map<File, String>.toFileEntities(sort: ListSort = ListSort.DATE): Li
                         name = file.name,
                         path = file.absolutePath,
                         hash = hash,
-                        size = file.length(),
+                        parentHash = file.parentFile.absolutePath.toMd5String(),
+                        size = if (Configure.countDirSize) file.size else 0,
                         date = file.lastModified(),
                         isFile = file.isFile,
                         isDirectory = file.isDirectory,
                         childCount = children.size,
                         firstFileHash = firstFileHash,
                         firstFileType = firstFileType,
-                        false
+                        file.isSymlink()
                     )
                 )
             }
         }
 
         //然后展示文件[文件已经在查询时排序过，所以不用再次排序]
-        group[false]?.forEach { file ->
+        group[false]?.sort(sort)?.forEach { file ->
             val hash = map[file].orEmpty()
             if (hash.isNotBlank()) { //如果没有文件索引则忽略该文件
                 add(
@@ -121,6 +176,7 @@ suspend fun Map<File, String>.toFileEntities(sort: ListSort = ListSort.DATE): Li
                         name = file.name,
                         path = file.absolutePath,
                         hash = hash,
+                        parentHash = file.parentFile.absolutePath.toMd5String(),
                         size = file.length(),
                         date = file.lastModified(),
                         isFile = file.isFile,
@@ -128,7 +184,7 @@ suspend fun Map<File, String>.toFileEntities(sort: ListSort = ListSort.DATE): Li
                         childCount = 0,
                         firstFileHash = "",
                         firstFileType = FileType.Media.UNKNOWN,
-                        false
+                        file.isSymlink()
                     )
                 )
             }
@@ -147,7 +203,8 @@ fun List<File>?.findFirstMedia(): File? {
     } ?: first()
 }
 
-fun List<File>.sort(sort: ListSort): List<File> {
+fun List<File>.sort(sort: ListSort?): List<File> {
+    sort ?: return this
     return when (sort) {
         ListSort.NAME -> sortedByName()
         ListSort.SIZE -> sortedBySize()
@@ -190,7 +247,11 @@ fun List<File>.sortedByNameDESC(): List<File> {
 fun List<File>.sortedBySize(): List<File> {
     return sortedBy { child ->
         if (child.isDirectory) {
-            child.listFiles()?.sumOf { mChild -> mChild.length() } ?: 0
+            if (Configure.countDirSize) {
+                child.size
+            } else {
+                child.listFiles()?.sumOf { mChild -> mChild.length() } ?: 0
+            }
         } else {
             child.length()
         }
