@@ -18,7 +18,6 @@ object Configure {
             obj = JSONObject()
             obj.put("ffmpeg", "ffmpeg")
             obj.put("ffProbe", "ffprobe")
-            obj.put("rootDir", "./VirtualDrive")
             obj.put("countDirSize", false)
             obj.put("mountedDirs", listOf("./VirtualDrive"))
             configure.createNewFile()
@@ -42,16 +41,6 @@ object Configure {
                 File(userDir, it.removePrefix("./")).absolutePath
             } else {
                 it
-            }
-        }
-    }
-
-    val rootDir: File by lazy {
-        obj.optString("rootDir", "./VirtualDrive").let {
-            if (it.startsWith("./")) {
-                File(userDir, it.removePrefix("./"))
-            } else {
-                File(it)
             }
         }
     }
