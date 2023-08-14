@@ -120,7 +120,7 @@ class Encoder(ffmpeg: String = "ffmpeg") {
     }
 
     fun input(file: File): Encoder {
-        params.add("-i \"${file.symbolicPath()}\"")
+        params.add("-i ${file.symbolicPath()}")
 //        params.add("-i \"${file.absolutePath.formatPath()}\"")
         if (duration == 0f) {
             duration = MediaInfo.create(file).format.duration.toFloat()
@@ -424,7 +424,7 @@ class Encoder(ffmpeg: String = "ffmpeg") {
         }
 
         params.add("-y")
-        params.add("\"${File(dir, "%8d.$extension").absolutePath.formatPath()}\"")
+        params.add(File(dir, "%8d.$extension").absolutePath.formatPath())
 
         execute(params.joinToString(" ")).also {
             return if (it.first) {
@@ -474,7 +474,7 @@ class Encoder(ffmpeg: String = "ffmpeg") {
 
             val cache = File(output.parent, output.absolutePath.toMd5String() + ".${output.extension}")
             params.add("-y")
-            params.add("\"${cache.absolutePath.formatPath()}\"")
+            params.add(cache.absolutePath.formatPath())
 
             execute(params.joinToString(" ")).also {
                 return if (it.first) {

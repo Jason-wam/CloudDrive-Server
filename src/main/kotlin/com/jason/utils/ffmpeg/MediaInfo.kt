@@ -66,7 +66,7 @@ class MediaInfo {
             params.add("-select_streams v")
             params.add("-show_format")
             params.add("-show_streams")
-            params.add("-i \"${file.symbolicPath()}\"")
+            params.add("-i ${file.symbolicPath()}")
             params.add("-print_format json")
             val command = params.joinToString(" ")
             val process = Runtime.getRuntime().exec(command)
