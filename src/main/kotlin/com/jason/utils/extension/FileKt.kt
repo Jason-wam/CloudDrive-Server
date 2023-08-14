@@ -125,9 +125,9 @@ fun String.formatPath(): String {
 }
 
 fun File.symbolicPath(): String {
-    if (isSymlink()) {
-        return absolutePath
-    }
+//    if (isSymlink()) {
+//        return absolutePath
+//    }
     val symbolicDir = File(Configure.cacheDir, "symbolic").also { it.mkdirs() }
     return createSymbolicLink(symbolicDir, absolutePath.toMd5String() + ".$extension").absolutePath.formatPath()
 }
@@ -147,6 +147,7 @@ fun File.createSymbolicLink(toDir: File, fileName: String, overwrite: Boolean = 
         Files.createSymbolicLink(link.toPath(), toPath())
     } catch (e: Exception) {
         e.printStackTrace()
+        LoggerFactory.getLogger("FileKt").error("createSymbolicLink: $fileName >> ${e.stackTraceToString()}")
         return this
     }
     return link
