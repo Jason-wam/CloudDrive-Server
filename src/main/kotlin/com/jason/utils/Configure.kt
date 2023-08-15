@@ -16,14 +16,19 @@ object Configure {
             obj = JSONObject(configure.readText())
         } else {
             obj = JSONObject()
+            obj.put("port", "port")
             obj.put("ffmpeg", "ffmpeg")
             obj.put("ffProbe", "ffprobe")
             obj.put("countDirSize", false)
-            obj.put("password", "123456")
+            obj.put("password", "")
             obj.put("mountedDirs", listOf("./VirtualDrive"))
             configure.createNewFile()
             configure.writeText(obj.toString(2))
         }
+    }
+
+    val port: Int by lazy {
+        obj.optInt("port", 8820)
     }
 
     val ffmpeg: String by lazy {

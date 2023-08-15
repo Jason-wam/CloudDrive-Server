@@ -24,5 +24,8 @@ suspend inline fun ApplicationCall.setContentDisposition(name: String) {
 
 fun ApplicationCall.checkPassword(): Boolean {
     if (Configure.password.isBlank()) return true
+    if (parameters["password"]?.isNotBlank() == true) {
+        return Configure.password == parameters["password"]
+    }
     return Configure.password == request.headers["password"]
 }

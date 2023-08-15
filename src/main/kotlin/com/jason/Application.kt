@@ -32,7 +32,7 @@ fun main() {
     }
     LoggerFactory.getLogger("Main").info("登录密码：${Configure.password}")
     LoggerFactory.getLogger("Main").info("启动服务器...")
-    embeddedServer(Netty, port = 8820, host = "0.0.0.0", module = Application::module).start(wait = true)
+    embeddedServer(Netty, port = Configure.port, host = "0.0.0.0", module = Application::module).start(wait = true)
 }
 
 fun Application.module() {
