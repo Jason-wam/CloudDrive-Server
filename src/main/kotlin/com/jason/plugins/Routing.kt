@@ -47,7 +47,7 @@ fun Application.configureRouting() {
                     val totalStorage = dir.totalSpace
                     val selfUsedStorage = DatabaseFactory.dbQuery {
                         DatabaseFactory.fileIndexDao.queryAll().filter {
-                            !it[FileIndexTable.isDirectory]
+                            !it[FileIndexTable.isDirectory] && it[FileIndexTable.path].startsWith(dir.absolutePath)
                         }.sumOf {
                             it[FileIndexTable.size]
                         }
@@ -56,12 +56,12 @@ fun Application.configureRouting() {
                         MountedDirEntity(
                             dir.absolutePath.toMd5String(),
                             dir.name.ifBlank { dir.absolutePath },
-                            usedStorage,
-                            totalStorage,
-                            selfUsedStorage,
-                            usedStorage.toFileSizeString(),
-                            totalStorage.toFileSizeString(),
-                            selfUsedStorage.toFileSizeString()
+                            usedStorage = usedStorage,
+                            totalStorage = totalStorage,
+                            selfUsedStorage = selfUsedStorage,
+                            usedStorageText = usedStorage.toFileSizeString(),
+                            totalStorageText = totalStorage.toFileSizeString(),
+                            selfUsedStorageText = selfUsedStorage.toFileSizeString()
                         )
                     )
                 }
