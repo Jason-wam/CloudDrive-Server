@@ -5,6 +5,7 @@ import com.jason.plugins.configureHTTP
 import com.jason.plugins.configureRouting
 import com.jason.utils.Configure
 import com.jason.utils.FileIndexer
+import com.jason.utils.NetworkUtils
 import com.jason.utils.ffmpeg.Encoder
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -21,11 +22,15 @@ fun main() {
         .info("version = ${Encoder(Configure.ffmpeg).param("-version").execute().lines().first()}")
     LoggerFactory.getLogger("Configure").info("TempDir = ${Configure.cacheDir}")
 
-
     runBlocking {
         FileIndexer.indexFiles()
     }
 
+
+    NetworkUtils.getLocalIPAddresses().forEach {
+        LoggerFactory.getLogger("Main").info("本机IP：$it:8820")
+    }
+    LoggerFactory.getLogger("Main").info("登录密码：${Configure.password}")
     LoggerFactory.getLogger("Main").info("启动服务器...")
     embeddedServer(Netty, port = 8820, host = "0.0.0.0", module = Application::module).start(wait = true)
 }

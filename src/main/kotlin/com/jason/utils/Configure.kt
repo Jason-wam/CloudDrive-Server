@@ -19,6 +19,7 @@ object Configure {
             obj.put("ffmpeg", "ffmpeg")
             obj.put("ffProbe", "ffprobe")
             obj.put("countDirSize", false)
+            obj.put("password", "123456")
             obj.put("mountedDirs", listOf("./VirtualDrive"))
             configure.createNewFile()
             configure.writeText(obj.toString(2))
@@ -62,5 +63,9 @@ object Configure {
 
     val countDirSize: Boolean by lazy {
         obj.optBoolean("countDirSize", false)
+    }
+
+    val password: String by lazy {
+        obj.optString("password", "123456")
     }
 }

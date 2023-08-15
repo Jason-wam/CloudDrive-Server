@@ -1,5 +1,6 @@
 package com.jason.utils.extension
 
+import com.jason.utils.Configure
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +11,7 @@ import java.net.URLEncoder
 fun ApplicationCall.setContentLength(length: Long) {
     response.header("Content-Length", length)
 }
+
 suspend inline fun ApplicationCall.setContentDisposition(name: String) {
     response.header(
         "Content-Disposition", "attachment; filename=${
@@ -18,4 +20,9 @@ suspend inline fun ApplicationCall.setContentDisposition(name: String) {
             }
         }"
     )
+}
+
+fun ApplicationCall.checkPassword(): Boolean {
+    if (Configure.password.isBlank()) return true
+    return Configure.password == request.headers["password"]
 }

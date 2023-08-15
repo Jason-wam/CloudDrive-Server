@@ -20,11 +20,20 @@ import java.io.File
 
 fun Application.configureRouting() {
     routing {
-        get("/") {
-            call.respondText("Wink")
+        get("/connect") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
+            call.respond(CodeMessageRespondEntity(200, "芝麻开门！"))
         }
 
         get("/homePage") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
+
             val recentSize = (call.parameters["recentSize"] ?: "10").toInt()
             val showHidden = (call.parameters["showHidden"] ?: "false").toBoolean()
 
@@ -58,38 +67,57 @@ fun Application.configureRouting() {
                 }
             }
 
-            call.respond(
-                HomePageRespondEntity(
-                    mountedDirs,
-                    DatabaseFactory.fileIndexDao.recentFiles(recentSize).filter {
-                        it.key.exists()
-                    }.filter {
-                        if (showHidden) true else it.key.isHidden.not()
-                    }.toFileEntities(ListSort.DATE_DESC)
-                )
+            call.respond(HomePageRespondEntity(mountedDirs,
+                DatabaseFactory.fileIndexDao.recentFiles(recentSize).filter {
+                    it.key.exists()
+                }.filter {
+                    if (showHidden) true else it.key.isHidden.not()
+                }.toFileEntities(ListSort.DATE_DESC)
+            )
             )
         }
 
         get("/duplication") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
+
             call.respond(DuplicationRespondEntity(DatabaseFactory.fileIndexDao.findDuplications()))
         }
 
         get("/index") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             FileIndexer.indexFiles()
             call.respond(CodeMessageRespondEntity(200, "刷新文件索引完毕！"))
         }
 
         get("/reindex") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             FileIndexer.reindex()
             call.respond(CodeMessageRespondEntity(200, "重建文件索引完毕！"))
         }
 
         get("/scanDatabase") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             FileIndexer.scanDatabaseRows()
             call.respond(CodeMessageRespondEntity(200, "数据库整理完毕！"))
         }
 
         get("/list") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             val showHidden = (call.parameters["showHidden"] ?: "false").toBoolean()
             val sort = call.parameters["sort"].let {
                 ListSort.valueOf(it ?: ListSort.DATE_DESC.name)
@@ -114,20 +142,20 @@ fun Application.configureRouting() {
                 call.respond(CodeMessageRespondEntity(404, "NotFound，文件路径不存在！"))
             } else {
                 FileIndexer.indexDirectory(file)
-                call.respond(
-                    FileListRespondEntity(
-                        hash,
-                        file.name,
-                        file.absolutePath,
-                        file.children.filter { if (showHidden) true else it.isHidden.not() }
-                            .toFileEntities(file.absolutePath, sort),
-                        file.toNavigation()
-                    )
-                )
+                call.respond(FileListRespondEntity(hash,
+                    file.name,
+                    file.absolutePath,
+                    file.children.filter { if (showHidden) true else it.isHidden.not() }
+                        .toFileEntities(file.absolutePath, sort),
+                    file.toNavigation()))
             }
         }
 
         get("/search") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             val kw = call.parameters["kw"].orEmpty()
             val page = (call.parameters["page"] ?: "1").toInt()
             val size = (call.parameters["size"] ?: "100").toInt()
@@ -149,22 +177,21 @@ fun Application.configureRouting() {
             if (files.isEmpty()) {
                 call.respond(CodeMessageRespondEntity(404, "没有搜索到相关结果！"))
             } else {
-                call.respond(
-                    SearchRespondEntity(
-                        page,
-                        files.size,
-                        files.size == size,
-                        files.filter {
-                            it.key.exists()
-                        }.filter {
-                            if (showHidden) true else it.key.isHidden.not()
-                        }.toFileEntities(sort)
-                    )
+                call.respond(SearchRespondEntity(page, files.size, files.size == size, files.filter {
+                    it.key.exists()
+                }.filter {
+                    if (showHidden) true else it.key.isHidden.not()
+                }.toFileEntities(sort)
+                )
                 )
             }
         }
 
         get("/searchType") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             val type = call.parameters["type"]?.let { FileType.Media.valueOf(it) }
             val page = (call.parameters["page"] ?: "1").toInt()
             val size = (call.parameters["size"] ?: "100").toInt()
@@ -186,22 +213,21 @@ fun Application.configureRouting() {
             if (files.isEmpty()) {
                 call.respond(CodeMessageRespondEntity(404, "没有查找到相关结果！"))
             } else {
-                call.respond(
-                    SearchRespondEntity(
-                        page,
-                        files.size,
-                        files.size == size,
-                        files.filter {
-                            it.key.exists()
-                        }.filter {
-                            if (showHidden) true else it.key.isHidden.not()
-                        }.toFileEntities(ListSort.DATE_DESC)
-                    )
+                call.respond(SearchRespondEntity(page, files.size, files.size == size, files.filter {
+                    it.key.exists()
+                }.filter {
+                    if (showHidden) true else it.key.isHidden.not()
+                }.toFileEntities(ListSort.DATE_DESC)
+                )
                 )
             }
         }
 
         get("/thumbnail") {
+            if (call.checkPassword().not()) {
+                call.respond(HttpStatusCode.BadRequest, "No Permission！")
+                return@get
+            }
             val hash = call.parameters["hash"]
             val isGif = (call.parameters["isGif"] ?: "false").toBoolean()
             val size = (call.parameters["size"] ?: "-1").toInt()
@@ -229,6 +255,10 @@ fun Application.configureRouting() {
         }
 
         get("/file") {
+            if (call.checkPassword().not()) {
+                call.respond(HttpStatusCode.BadRequest, "No Permission！")
+                return@get
+            }
             val hash = call.parameters["hash"]
             if (hash.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, "BadRequest，hash不得为空！")
@@ -251,6 +281,10 @@ fun Application.configureRouting() {
         }
 
         get("/createFolder") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             val hash = call.parameters["hash"]
             val name = call.parameters["name"]
             if (hash.isNullOrBlank()) {
@@ -279,6 +313,10 @@ fun Application.configureRouting() {
         }
 
         post("/delete") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@post
+            }
             val path = call.receiveParameters()["path"]
             if (path.isNullOrBlank()) {
                 call.respond(CodeMessageRespondEntity(404, "NotFound，未查找到指定文件路径！"))
@@ -307,6 +345,10 @@ fun Application.configureRouting() {
         }
 
         post("/rename") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@post
+            }
             val params = call.receiveParameters()
             val path = params["path"]
             val newName = params["newName"]
@@ -353,6 +395,10 @@ fun Application.configureRouting() {
         }
 
         get("/flashTransfer") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
             val hash = call.parameters["hash"]
             val fileHash = call.parameters["fileHash"]
             val fileName = call.parameters["fileName"].orEmpty()
@@ -403,6 +449,10 @@ fun Application.configureRouting() {
         }
 
         post("/upload") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@post
+            }
             val hash = call.parameters["hash"]
             val fileHash = call.parameters["fileHash"]
 
@@ -462,6 +512,11 @@ fun Application.configureRouting() {
         }
 
         get("/flashBackup") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@get
+            }
+
             val fileName = call.parameters["fileName"]
             val fileHash = call.parameters["fileHash"]
             val folderHash = call.parameters["folderHash"]
@@ -544,6 +599,11 @@ fun Application.configureRouting() {
         }
 
         post("/backup") {
+            if (call.checkPassword().not()) {
+                call.respond(CodeMessageRespondEntity(403, "BadRequest，密码错误！"))
+                return@post
+            }
+
             val fileName = call.parameters["fileName"]
             val fileHash = call.parameters["fileHash"]
             val folderHash = call.parameters["folderHash"]
