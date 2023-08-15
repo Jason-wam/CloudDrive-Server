@@ -1,7 +1,9 @@
 package com.jason.plugins
 
+import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.compression.*
+import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.partialcontent.*
 
 fun Application.configureHTTP() {
@@ -18,5 +20,8 @@ fun Application.configureHTTP() {
             priority = 10.0
             minimumSize(1024) // condition
         }
+    }
+    install(ContentNegotiation) {
+        json()
     }
 }

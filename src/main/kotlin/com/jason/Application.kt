@@ -3,7 +3,6 @@ package com.jason
 import com.jason.database.DatabaseFactory
 import com.jason.plugins.configureHTTP
 import com.jason.plugins.configureRouting
-import com.jason.plugins.configureSerialization
 import com.jason.utils.Configure
 import com.jason.utils.FileIndexer
 import com.jason.utils.ffmpeg.Encoder
@@ -33,6 +32,5 @@ fun main() {
 
 fun Application.module() {
     configureHTTP()
-    configureSerialization()
     configureRouting()
 }
