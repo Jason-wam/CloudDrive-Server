@@ -55,7 +55,7 @@ fun Application.configureRouting() {
                     add(
                         MountedDirEntity(
                             dir.absolutePath.toMd5String(),
-                            dir.absolutePath,
+                            dir.name.ifBlank { dir.absolutePath },
                             usedStorage,
                             totalStorage,
                             selfUsedStorage,
@@ -228,6 +228,7 @@ fun Application.configureRouting() {
                 call.respond(HttpStatusCode.BadRequest, "No Permission！")
                 return@get
             }
+
             val hash = call.parameters["hash"]
             val isGif = (call.parameters["isGif"] ?: "false").toBoolean()
             val size = (call.parameters["size"] ?: "-1").toInt()

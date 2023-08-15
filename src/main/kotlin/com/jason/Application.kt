@@ -27,6 +27,8 @@ fun main() {
     }
 
 
+    LoggerFactory.getLogger("Main").info("源码发布页：https://github.com/Jason-wam/CloudDrive-Server")
+    LoggerFactory.getLogger("Main").info("源码发布页：https://github.com/Jason-wam/CloudDrive-Android")
     NetworkUtils.getLocalIPAddresses().forEach {
         LoggerFactory.getLogger("Main").info("本机IP：$it:8820")
     }

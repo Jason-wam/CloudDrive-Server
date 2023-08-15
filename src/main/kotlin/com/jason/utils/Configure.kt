@@ -20,7 +20,7 @@ object Configure {
             obj.put("ffmpeg", "ffmpeg")
             obj.put("ffProbe", "ffprobe")
             obj.put("countDirSize", false)
-            obj.put("password", "")
+            obj.put("password", "123456")
             obj.put("mountedDirs", listOf("./VirtualDrive"))
             configure.createNewFile()
             configure.writeText(obj.toString(2))

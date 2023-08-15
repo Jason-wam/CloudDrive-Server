@@ -178,13 +178,8 @@ fun File.toNavigation(): List<FileNavigationEntity> {
         return ArrayList<FileNavigationEntity>().apply {
             this@listNavigation2.parentFile?.let {
                 if (it.absolutePath.startsWith(rootDir.absolutePath)) {
-                    if (it.absolutePath != rootDir.absolutePath) {
-                        addAll(it.listNavigation2())
-                        add(FileNavigationEntity(it.name, it.absolutePath.toMd5String()))
-                    } else {
-                        addAll(it.listNavigation2())
-                        add(FileNavigationEntity(it.absolutePath, it.absolutePath.toMd5String()))
-                    }
+                    addAll(it.listNavigation2())
+                    add(FileNavigationEntity(it.name.ifBlank { it.absolutePath }, it.absolutePath.toMd5String()))
                 }
             }
         }
@@ -193,11 +188,7 @@ fun File.toNavigation(): List<FileNavigationEntity> {
     return ArrayList<FileNavigationEntity>().apply {
         addAll(listNavigation2())
         val current = this@toNavigation
-        if (current.absolutePath != rootDir.absolutePath) {
-            add(FileNavigationEntity(current.name, current.absolutePath.toMd5String()))
-        } else {
-            add(FileNavigationEntity(current.absolutePath, current.absolutePath.toMd5String()))
-        }
+        add(FileNavigationEntity(current.name.ifBlank { current.absolutePath }, current.absolutePath.toMd5String()))
     }
 }
 

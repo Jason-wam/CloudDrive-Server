@@ -418,7 +418,7 @@ class Encoder(ffmpeg: String = "ffmpeg") {
                 it.startsWith("-i")
             }.also {
                 if (it != -1) {
-                    params.add(it - 1, "-ss ${duration / 2f}")
+                    params.add(it - 1, "-ss ${(duration / 3f).toLong()}")
                 }
             }
         }
@@ -467,7 +467,7 @@ class Encoder(ffmpeg: String = "ffmpeg") {
                     it.startsWith("-i")
                 }.also {
                     if (it != -1) {
-                        params.add(it, "-ss ${duration / 2f}")
+                        params.add(it, "-ss ${(duration / 3f).toLong()}")
                     }
                 }
             }

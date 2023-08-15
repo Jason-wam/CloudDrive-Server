@@ -86,54 +86,6 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort? = null
     }
 }
 
-
-suspend fun Map<File, String>.toFileEntitiesNoneSort(): List<FileEntity> {
-    return ArrayList<FileEntity>().apply {
-        this@toFileEntitiesNoneSort.forEach {
-            val file = it.key
-            if (file.isDirectory) {
-                val children = file.children
-                val first: File? = children.findFirstMedia()
-                val firstFileHash = if (first == null) "" else DatabaseFactory.fileIndexDao.getHash(first.absolutePath)
-                val firstFileType = if (first == null) FileType.Media.UNKNOWN else FileType.getMediaType(first.name)
-                add(
-                    FileEntity(
-                        name = file.name,
-                        path = file.absolutePath,
-                        hash = it.value,
-                        parentHash = file.parentFile.absolutePath.toMd5String(),
-                        size = if (Configure.countDirSize) file.size else 0,
-                        date = file.lastModified(),
-                        isFile = false,
-                        isDirectory = true,
-                        childCount = children.size,
-                        firstFileHash = firstFileHash,
-                        firstFileType = firstFileType,
-                        file.isSymlink()
-                    )
-                )
-            } else {
-                add(
-                    FileEntity(
-                        name = file.name,
-                        path = file.absolutePath,
-                        hash = it.value,
-                        parentHash = file.parentFile.absolutePath.toMd5String(),
-                        size = file.length(),
-                        date = file.lastModified(),
-                        isFile = true,
-                        isDirectory = false,
-                        childCount = 0,
-                        firstFileHash = "",
-                        firstFileType = FileType.Media.UNKNOWN,
-                        file.isSymlink()
-                    )
-                )
-            }
-        }
-    }
-}
-
 suspend fun Map<File, String>.toFileEntities(sort: ListSort? = null): List<FileEntity> {
     val map = this
     return ArrayList<FileEntity>().apply {
