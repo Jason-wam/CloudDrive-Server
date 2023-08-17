@@ -25,7 +25,8 @@ data class FileEntity(
     val childCount: Int,
     val firstFileHash: String,
     val firstFileType: FileType.Media,
-    val isVirtual: Boolean
+    val isVirtual: Boolean,
+    var countDirSize: Boolean = false
 )
 
 suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort? = null): List<FileEntity> {
@@ -55,7 +56,8 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort? = null
                         childCount = children.size,
                         firstFileHash = firstFileHash,
                         firstFileType = firstFileType,
-                        file.isSymlink()
+                        isVirtual = file.isSymlink(),
+                        countDirSize = Configure.countDirSize
                     )
                 )
             }
@@ -78,7 +80,8 @@ suspend fun List<File>.toFileEntities(parentPath: String, sort: ListSort? = null
                         childCount = 0,
                         firstFileHash = "",
                         firstFileType = FileType.Media.UNKNOWN,
-                        file.isSymlink()
+                        isVirtual = file.isSymlink(),
+                        countDirSize = Configure.countDirSize
                     )
                 )
             }
@@ -113,7 +116,8 @@ suspend fun Map<File, String>.toFileEntities(sort: ListSort? = null): List<FileE
                         childCount = children.size,
                         firstFileHash = firstFileHash,
                         firstFileType = firstFileType,
-                        file.isSymlink()
+                        isVirtual = file.isSymlink(),
+                        countDirSize = Configure.countDirSize
                     )
                 )
             }
@@ -136,7 +140,8 @@ suspend fun Map<File, String>.toFileEntities(sort: ListSort? = null): List<FileE
                         childCount = 0,
                         firstFileHash = "",
                         firstFileType = FileType.Media.UNKNOWN,
-                        file.isSymlink()
+                        isVirtual = file.isSymlink(),
+                        countDirSize = Configure.countDirSize
                     )
                 )
             }
